@@ -1,4 +1,445 @@
-<html>
-<head><title>비행기 뽀모도로</title></head>
-<body>응애</body>
-</htlm>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>PomoFlight — Premium Pomodoro Flight Timer</title>
+<meta name="description" content="비행기 컨셉의 프리미엄 포모도로 타이머">
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        colors: {
+          bgdeep: '#0F0C1B',
+          bgdeep2: '#1A102F',
+          ticket: '#2C122D',
+          ticket2: '#3D183B',
+          neon: '#FF2A85',
+          cyan: '#00F0FF',
+        },
+        fontFamily: {
+          sans: ['"Plus Jakarta Sans"', 'Inter', 'sans-serif'],
+          mono: ['"JetBrains Mono"', 'monospace'],
+        },
+        boxShadow: {
+          neon: '0 0 20px rgba(255,42,133,0.45), 0 0 60px rgba(255,42,133,0.15)',
+          cyan: '0 0 20px rgba(0,240,255,0.45), 0 0 60px rgba(0,240,255,0.12)',
+        }
+      }
+    }
+  }
+</script>
+
+<!-- Lucide Icons -->
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="min-h-screen bg-bgdeep text-slate-100 font-sans antialiased overflow-x-hidden">
+
+<!-- Ambient background -->
+<div class="fixed inset-0 -z-10 bg-gradient-radial">
+  <div class="stars"></div>
+  <div class="aurora aurora-1"></div>
+  <div class="aurora aurora-2"></div>
+</div>
+
+<!-- ===================== HEADER / DASHBOARD ===================== -->
+<header id="app-header" class="relative z-20">
+  <div class="max-w-6xl mx-auto px-5 sm:px-8 pt-8 pb-4">
+    <div class="flex items-center justify-between mb-8">
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-neon to-fuch-600 flex items-center justify-center shadow-neon">
+          <i data-lucide="plane" class="w-6 h-6 text-white -rotate-45"></i>
+        </div>
+        <div>
+          <h1 class="text-xl sm:text-2xl font-extrabold tracking-tight leading-none">Pomo<span class="text-neon">Flight</span></h1>
+          <p class="text-[11px] sm:text-xs text-slate-400 tracking-widest uppercase mt-0.5">Premium Focus Airlines</p>
+        </div>
+      </div>
+      <button id="history-toggle-btn" class="flex items-center gap-2 px-3.5 py-2 rounded-full bg-white/5 border border-white/10 hover:border-cyan/50 hover:bg-white/10 transition-all text-xs sm:text-sm font-medium">
+        <i data-lucide="scroll-text" class="w-4 h-4 text-cyan"></i>
+        <span class="hidden sm:inline">Flight Log</span>
+      </button>
+    </div>
+
+    <!-- Stat strip -->
+    <div class="grid grid-cols-3 gap-3 sm:gap-4">
+      <div class="stat-card">
+        <i data-lucide="timer" class="w-4 h-4 text-neon mb-2"></i>
+        <div class="stat-value" id="stat-total-time">0h 0m</div>
+        <div class="stat-label">Total Flight Time</div>
+      </div>
+      <div class="stat-card">
+        <i data-lucide="gauge-circle" class="w-4 h-4 text-cyan mb-2"></i>
+        <div class="stat-value" id="stat-mileage">0 <span class="text-xs sm:text-sm font-semibold text-slate-400">km</span></div>
+        <div class="stat-label">Mileage Earned</div>
+      </div>
+      <div class="stat-card">
+        <i data-lucide="badge-check" class="w-4 h-4 text-amber-400 mb-2"></i>
+        <div class="stat-value" id="stat-flights">0</div>
+        <div class="stat-label">Completed Flights</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ===================== MAIN ===================== -->
+<main class="relative z-10 max-w-6xl mx-auto px-5 sm:px-8 pb-24">
+
+  <!-- ---------- SELECTION VIEW ---------- -->
+  <section id="selection-view">
+    <div class="flex items-center justify-between mt-4 mb-4">
+      <h2 class="text-sm font-semibold tracking-widest text-slate-400 uppercase flex items-center gap-2">
+        <i data-lucide="route" class="w-4 h-4"></i> Choose Your Route
+      </h2>
+      <button id="custom-flight-btn" class="flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-cyan hover:text-white transition-colors">
+        <i data-lucide="plus-circle" class="w-4 h-4"></i> Custom Flight
+      </button>
+    </div>
+
+    <div id="route-grid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+      <!-- route cards injected by JS -->
+    </div>
+
+    <!-- Selected Boarding Pass Preview -->
+    <div class="mt-10">
+      <h2 class="text-sm font-semibold tracking-widest text-slate-400 uppercase flex items-center gap-2 mb-4">
+        <i data-lucide="ticket" class="w-4 h-4"></i> Your Boarding Pass
+      </h2>
+      <div id="ticket-wrap" class="flex justify-center">
+        <!-- boarding pass injected by JS (template below) -->
+      </div>
+
+      <div class="flex justify-center mt-8">
+        <button id="start-flight-btn" class="start-btn group">
+          <i data-lucide="plane-takeoff" class="w-5 h-5 transition-transform group-hover:translate-x-1"></i>
+          <span>Start Flight</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---------- FOCUS / FLIGHT MODE VIEW ---------- -->
+  <section id="focus-view" class="hidden">
+    <div class="focus-grid">
+
+      <!-- Window View -->
+      <div class="window-panel">
+        <div class="window-frame">
+          <div class="window-sky" id="window-sky">
+            <div class="sun-glow"></div>
+            <div class="cloud-layer" id="cloud-layer"></div>
+            <div class="wing"></div>
+          </div>
+          <div class="window-rivets"></div>
+          <div class="window-shine"></div>
+        </div>
+        <div class="window-caption">
+          <i data-lucide="cloud" class="w-3.5 h-3.5"></i>
+          <span id="altitude-readout">ALT 11,000m · Cruising</span>
+        </div>
+      </div>
+
+      <!-- Flight Console -->
+      <div class="console-panel">
+        <div id="focus-ticket-wrap" class="mb-6"></div>
+
+        <!-- Progress route bar -->
+        <div class="route-progress">
+          <div class="route-progress-endpoints">
+            <div class="rp-airport">
+              <span class="rp-code" id="rp-origin-code">ICN</span>
+              <span class="rp-label">Departure</span>
+            </div>
+            <div class="rp-airport text-right">
+              <span class="rp-code" id="rp-dest-code">HND</span>
+              <span class="rp-label">Arrival</span>
+            </div>
+          </div>
+          <div class="route-progress-track">
+            <div class="route-progress-fill" id="route-progress-fill"></div>
+            <div class="route-progress-plane" id="route-progress-plane">
+              <i data-lucide="plane" class="w-4 h-4"></i>
+            </div>
+          </div>
+          <div class="route-progress-meta">
+            <span id="progress-percent">0%</span>
+            <span id="distance-remaining">-- km remaining</span>
+          </div>
+        </div>
+
+        <!-- Timer -->
+        <div class="timer-display-wrap">
+          <div class="timer-display" id="timer-display">25:00</div>
+          <div class="timer-sub" id="timer-status">On schedule &middot; Cruising altitude</div>
+        </div>
+
+        <!-- Timer controls -->
+        <div class="flex items-center justify-center gap-3 mt-6">
+          <button id="pause-btn" class="control-btn control-btn-primary">
+            <i data-lucide="pause" class="w-5 h-5" id="pause-icon"></i>
+            <i data-lucide="play" class="w-5 h-5 hidden" id="play-icon"></i>
+            <span id="pause-btn-label">Pause</span>
+          </button>
+          <button id="abort-btn" class="control-btn control-btn-danger">
+            <i data-lucide="octagon-x" class="w-5 h-5"></i>
+            <span>Abort Landing</span>
+          </button>
+        </div>
+
+        <!-- Cabin Audio System -->
+        <div class="cabin-panel">
+          <div class="cabin-panel-header">
+            <i data-lucide="volume-2" class="w-4 h-4 text-cyan"></i>
+            <span>Cabin White Noise</span>
+            <button id="noise-toggle" class="ml-auto toggle-pill" data-active="false">OFF</button>
+          </div>
+          <input id="noise-volume" type="range" min="0" max="100" value="35" class="range-slider">
+        </div>
+
+        <!-- In-flight entertainment -->
+        <div class="cabin-panel">
+          <div class="cabin-panel-header">
+            <i data-lucide="tv" class="w-4 h-4 text-neon"></i>
+            <span>In-Flight Entertainment</span>
+            <button id="ife-toggle" class="ml-auto toggle-pill" data-active="false">CLOSED</button>
+          </div>
+          <div id="ife-body" class="hidden">
+            <div class="flex gap-2 mb-3">
+              <input id="youtube-url-input" type="text" placeholder="YouTube 링크 붙여넣기 (Lo-Fi 추천)" class="ife-input">
+              <button id="youtube-load-btn" class="ife-load-btn">
+                <i data-lucide="play" class="w-4 h-4"></i>
+              </button>
+            </div>
+            <div class="ife-screen-frame">
+              <div id="ife-screen-placeholder" class="ife-placeholder">
+                <i data-lucide="film" class="w-8 h-8 mb-2 opacity-40"></i>
+                <span>기내 모니터가 대기 중입니다</span>
+              </div>
+              <div id="ife-player-mount" class="w-full h-full hidden"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ===================== TEMPLATES ===================== -->
+
+<template id="route-card-template">
+  <button class="route-card" type="button">
+    <div class="route-card-top">
+      <span class="route-card-codes">
+        <span class="rc-origin"></span>
+        <i data-lucide="plane" class="w-3.5 h-3.5 rc-plane-icon"></i>
+        <span class="rc-dest"></span>
+      </span>
+      <span class="route-card-class">FIRST</span>
+    </div>
+    <div class="route-card-cities"></div>
+    <div class="route-card-meta">
+      <span class="rc-duration"><i data-lucide="clock" class="w-3.5 h-3.5"></i><span></span></span>
+      <span class="rc-distance"><i data-lucide="map-pin" class="w-3.5 h-3.5"></i><span></span></span>
+    </div>
+  </button>
+</template>
+
+<template id="boarding-pass-template">
+  <div class="boarding-pass">
+    <div class="bp-main">
+      <div class="bp-header">
+        <div class="bp-airline">
+          <div class="bp-logo"><i data-lucide="plane" class="w-4 h-4 -rotate-45"></i></div>
+          <div>
+            <div class="bp-airline-name">PomoFlight</div>
+            <div class="bp-airline-sub">BOARDING PASS</div>
+          </div>
+        </div>
+        <div class="bp-class-badge">FIRST CLASS</div>
+      </div>
+
+      <div class="bp-route">
+        <div class="bp-route-col">
+          <div class="bp-code bp-origin-code">ICN</div>
+          <div class="bp-city bp-origin-city">Seoul</div>
+        </div>
+
+        <div class="bp-route-mid">
+          <div class="bp-duration bp-flight-duration">2h 15m</div>
+          <div class="bp-route-line">
+            <span class="bp-dot"></span>
+            <span class="bp-line"></span>
+            <i data-lucide="plane" class="w-4 h-4 bp-plane-icon"></i>
+            <span class="bp-line"></span>
+            <span class="bp-dot"></span>
+          </div>
+          <div class="bp-distance bp-flight-distance">1,200 km</div>
+        </div>
+
+        <div class="bp-route-col text-right">
+          <div class="bp-code bp-dest-code">HND</div>
+          <div class="bp-city bp-dest-city">Tokyo</div>
+        </div>
+      </div>
+
+      <div class="bp-divider-row">
+        <span class="bp-divider-dot"></span>
+        <span class="bp-divider-dashed"></span>
+        <span class="bp-divider-dot"></span>
+      </div>
+
+      <div class="bp-fields">
+        <div class="bp-field">
+          <span class="bp-field-label">PASSENGER</span>
+          <span class="bp-field-value bp-passenger">FOCUS TRAVELER</span>
+        </div>
+        <div class="bp-field">
+          <span class="bp-field-label">FLIGHT NO</span>
+          <span class="bp-field-value bp-flight-no">PF-2026</span>
+        </div>
+        <div class="bp-field">
+          <span class="bp-field-label">SEAT</span>
+          <span class="bp-field-value bp-seat">06F</span>
+        </div>
+        <div class="bp-field">
+          <span class="bp-field-label">DATE</span>
+          <span class="bp-field-value bp-date">--</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="bp-stub">
+      <div class="bp-stub-notch bp-stub-notch-top"></div>
+      <div class="bp-stub-content">
+        <div class="bp-stub-codes">
+          <span class="bp-stub-origin">ICN</span>
+          <i data-lucide="plane" class="w-3.5 h-3.5 -rotate-45 my-1 opacity-60"></i>
+          <span class="bp-stub-dest">HND</span>
+        </div>
+        <div class="bp-stub-class">FIRST</div>
+        <div class="bp-barcode"></div>
+      </div>
+      <div class="bp-stub-notch bp-stub-notch-bottom"></div>
+    </div>
+  </div>
+</template>
+
+<!-- ===================== MODALS ===================== -->
+
+<!-- Custom Flight Modal -->
+<div id="custom-flight-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title"><i data-lucide="plane-takeoff" class="w-5 h-5 text-cyan"></i> Custom Flight</h3>
+      <button id="custom-modal-close" class="modal-close"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <form id="custom-flight-form" class="modal-body">
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="form-label">Origin Code</label>
+          <input id="custom-origin" maxlength="4" placeholder="ICN" class="form-input uppercase" required>
+        </div>
+        <div>
+          <label class="form-label">Destination Code</label>
+          <input id="custom-dest" maxlength="4" placeholder="XXX" class="form-input uppercase" required>
+        </div>
+      </div>
+      <div>
+        <label class="form-label">Origin City (optional)</label>
+        <input id="custom-origin-city" placeholder="Seoul" class="form-input">
+      </div>
+      <div>
+        <label class="form-label">Destination City (optional)</label>
+        <input id="custom-dest-city" placeholder="Somewhere" class="form-input">
+      </div>
+      <div>
+        <label class="form-label">Target Duration (minutes)</label>
+        <input id="custom-minutes" type="number" min="1" max="600" placeholder="25" class="form-input" required>
+      </div>
+      <button type="submit" class="w-full mt-2 start-btn justify-center">
+        <i data-lucide="check" class="w-5 h-5"></i>
+        <span>Create Flight</span>
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- Flight History Modal -->
+<div id="history-modal" class="modal-overlay hidden">
+  <div class="modal-box modal-box-wide">
+    <div class="modal-header">
+      <h3 class="modal-title"><i data-lucide="scroll-text" class="w-5 h-5 text-neon"></i> Flight History</h3>
+      <button id="history-modal-close" class="modal-close"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <div class="modal-body">
+      <div id="history-list" class="history-list"></div>
+      <div id="history-empty" class="history-empty hidden">
+        <i data-lucide="plane" class="w-8 h-8 opacity-30 mb-2"></i>
+        <p>아직 완료된 비행이 없습니다.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Landing Complete Modal -->
+<div id="landing-modal" class="modal-overlay hidden">
+  <div class="modal-box landing-box">
+    <div id="confetti-container" class="confetti-container"></div>
+    <div class="landing-icon-wrap">
+      <i data-lucide="party-popper" class="w-10 h-10 text-neon"></i>
+    </div>
+    <h3 class="landing-title">비행 완료!</h3>
+    <p class="landing-desc" id="landing-desc">1,004 km 마일리지가 적립되었습니다.</p>
+    <div class="landing-stats">
+      <div class="landing-stat">
+        <span class="landing-stat-value" id="landing-stat-time">25:00</span>
+        <span class="landing-stat-label">Flight Time</span>
+      </div>
+      <div class="landing-stat">
+        <span class="landing-stat-value" id="landing-stat-km">0 km</span>
+        <span class="landing-stat-label">Mileage</span>
+      </div>
+    </div>
+    <button id="landing-close-btn" class="w-full mt-6 start-btn justify-center">
+      <i data-lucide="home" class="w-5 h-5"></i>
+      <span>Return to Gate</span>
+    </button>
+  </div>
+</div>
+
+<!-- Abort Confirm Modal -->
+<div id="abort-modal" class="modal-overlay hidden">
+  <div class="modal-box abort-box">
+    <div class="landing-icon-wrap abort-icon-wrap">
+      <i data-lucide="triangle-alert" class="w-8 h-8 text-amber-400"></i>
+    </div>
+    <h3 class="landing-title">비행을 포기하시겠습니까?</h3>
+    <p class="landing-desc">현재까지의 진행 상황은 저장되지 않습니다.</p>
+    <div class="flex gap-3 mt-6">
+      <button id="abort-cancel-btn" class="control-btn control-btn-primary flex-1 justify-center">
+        <span>계속 비행</span>
+      </button>
+      <button id="abort-confirm-btn" class="control-btn control-btn-danger flex-1 justify-center">
+        <span>착륙 포기</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<audio id="chime-audio-fallback" class="hidden"></audio>
+
+<script src="script.js"></script>
+</body>
+</html>
