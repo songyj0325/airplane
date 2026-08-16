@@ -45,12 +45,67 @@ body { background: var(--bg-deep); }
 }
 .geo-marker-origin { background: var(--cyan); }
 .geo-marker-dest { background: var(--neon); }
-.geo-marker-world {
-  width: 7px; height: 7px;
-  margin: 4.5px;
-  border-radius: 50%;
-  border: 1px solid rgba(0,0,0,0.35);
+/* Recommended-airport IATA badge (clickable map pin) */
+.geo-pin-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: #FFD400;
+  color: #241d00;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 800;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  border: 1px solid rgba(0,0,0,0.3);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform .12s ease, background .12s ease;
+}
+.geo-pin-badge:hover { background: #ffffff; transform: scale(1.08); }
+
+/* =========================================================
+   Flight atmosphere — subtle day/night tint + drifting clouds
+   ========================================================= */
+#flight-atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1.2s ease, background 1.5s ease;
+}
+#flight-atmosphere.atmosphere-active { opacity: 1; }
+#flight-atmosphere.atmosphere-night {
+  background: linear-gradient(180deg, rgba(6,10,28,0.4) 0%, rgba(6,10,28,0.08) 42%, transparent 68%);
+}
+#flight-atmosphere.atmosphere-day {
+  background: linear-gradient(180deg, rgba(255,245,214,0.07) 0%, transparent 46%);
+}
+
+#cloud-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 16;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 1s ease;
+}
+#cloud-layer.cloud-layer-active { opacity: 1; }
+.cloud-wisp {
+  position: absolute;
+  left: -25vw;
   background: rgba(255,255,255,0.55);
+  border-radius: 50%;
+  filter: blur(9px);
+  opacity: 0.16;
+  animation: cloudDrift linear infinite;
+}
+@keyframes cloudDrift {
+  from { transform: translateX(0); }
+  to { transform: translateX(150vw); }
 }
 
 /* Real airplane marker (Leaflet divIcon, moves along the route) */
@@ -696,7 +751,11 @@ body { background: var(--bg-deep); }
   cursor: pointer;
   transition: all .15s ease;
 }
-.focus-tag-btn i { width: 22px; height: 22px; }
+.focus-tag-emoji {
+  font-size: 26px;
+  line-height: 1;
+  filter: grayscale(100%) brightness(2);
+}
 .focus-tag-btn:hover { border-color: rgba(16,185,129,0.5); color: #fff; }
 .focus-tag-btn.selected {
   background: rgba(16,185,129,0.14);
@@ -752,13 +811,37 @@ body { background: var(--bg-deep); }
   top: 74px; right: 16px;
   padding: 14px 18px;
   border-radius: 12px;
+  min-width: 190px;
   text-align: right;
   background: var(--surface);
   border: 1px solid rgba(255,255,255,0.1);
 }
-.hud-readout-label { font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(226,225,240,0.45); margin-bottom: 3px; }
+.hud-stats-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.hud-stats-card-header .hud-readout-label { margin-bottom: 0; text-align: left; }
+.hud-unit-toggle {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--neon);
+  background: rgba(16,185,129,0.12);
+  border: 1px solid rgba(16,185,129,0.35);
+  border-radius: 999px;
+  padding: 2px 9px;
+  cursor: pointer;
+  transition: background .15s ease;
+}
+.hud-unit-toggle:hover { background: rgba(16,185,129,0.22); }
+.hud-readout-label { font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(226,225,240,0.45); margin-bottom: 3px; text-align: right; }
+.hud-readout-label-sub { font-size: 9px; }
 .hud-readout-value { font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: clamp(1.5rem, 4vw, 1.9rem); color: #fff; line-height: 1; }
-.hud-unit { font-size: 0.5em; font-weight: 700; color: var(--neon); }
 .hud-speed { display: flex; align-items: center; justify-content: flex-end; gap: 5px; margin-top: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--cyan); }
 
 .hud-bottomleft {
@@ -954,7 +1037,6 @@ body { background: var(--bg-deep); }
   border-radius: 999px;
   padding: 1px 7px;
 }
-.history-purpose i { width: 10px; height: 10px; }
 .history-km { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 12.5px; color: var(--neon); white-space: nowrap; flex-shrink: 0; }
 .history-delete-btn {
   width: 28px; height: 28px;
@@ -980,6 +1062,41 @@ body { background: var(--bg-deep); }
   border: 1px solid var(--neon);
 }
 .abort-icon-wrap { background: #2a2008; border-color: #d99a1c; }
+
+.passport-stamp-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 108px;
+  margin-bottom: 4px;
+}
+.stamp-ring {
+  position: relative;
+  width: 100px; height: 100px;
+  border-radius: 50%;
+  border: 3px solid var(--neon);
+  box-shadow: inset 0 0 0 3px rgba(16,185,129,0.22);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--neon);
+  transform: rotate(-24deg) scale(1.8);
+  opacity: 0;
+  animation: stampImpact .5s cubic-bezier(.2,1.4,.4,1) forwards;
+  animation-delay: .15s;
+}
+.stamp-top-text { font-size: 6px; letter-spacing: 0.12em; font-weight: 700; text-transform: uppercase; }
+.stamp-code { font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: 22px; line-height: 1; }
+.stamp-date { font-size: 7.5px; font-family: 'JetBrains Mono', monospace; letter-spacing: 0.04em; }
+@keyframes stampImpact {
+  0% { transform: rotate(-24deg) scale(1.8); opacity: 0; }
+  55% { transform: rotate(-8deg) scale(0.92); opacity: 1; }
+  75% { transform: rotate(-11deg) scale(1.04); }
+  100% { transform: rotate(-9deg) scale(1); opacity: 1; }
+}
+
 .landing-title { font-size: 20px; font-weight: 800; color: #fff; margin-bottom: 6px; }
 .landing-desc { font-size: 13.5px; color: rgba(226,225,240,0.6); }
 .landing-stats { display: flex; justify-content: center; gap: 28px; margin-top: 20px; }

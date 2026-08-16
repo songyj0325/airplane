@@ -24,7 +24,9 @@
     { origin: 'ICN', dest: 'HND', originCity: 'Seoul', destCity: 'Tokyo',        o: ICN, d: [35.5494, 139.7798] },
     { origin: 'PUS', dest: 'OKA', originCity: 'Busan', destCity: 'Okinawa',      o: PUS, d: [26.1958, 127.6458] },
     { origin: 'ICN', dest: 'CJU', originCity: 'Seoul', destCity: 'Jeju',         o: ICN, d: [33.5113, 126.4930] },
+    { origin: 'ICN', dest: 'YNY', originCity: 'Seoul', destCity: 'Yangyang',     o: ICN, d: [38.0611, 128.6692] },
     { origin: 'ICN', dest: 'KIX', originCity: 'Seoul', destCity: 'Osaka',        o: ICN, d: [34.4347, 135.2441] },
+    { origin: 'ICN', dest: 'NGO', originCity: 'Seoul', destCity: 'Nagoya',       o: ICN, d: [34.8584, 136.8054] },
     { origin: 'ICN', dest: 'TPE', originCity: 'Seoul', destCity: 'Taipei',       o: ICN, d: [25.0797, 121.2342] },
     { origin: 'ICN', dest: 'HKG', originCity: 'Seoul', destCity: 'Hong Kong',    o: ICN, d: [22.3080, 113.9185] },
     { origin: 'ICN', dest: 'PEK', originCity: 'Seoul', destCity: 'Beijing',      o: ICN, d: [40.0799, 116.6031] },
@@ -121,12 +123,61 @@
   }
 
   /* ---------------------------------------------------------
+     Flight atmosphere — a light day/night tint keyed to the plane's
+     current longitude (approximate local solar time), plus a handful
+     of slow-drifting cloud wisps. Kept deliberately subtle.
+  --------------------------------------------------------- */
+  function estimateLocalHour(lng) {
+    const utcHour = new Date().getUTCHours() + new Date().getUTCMinutes() / 60;
+    return ((utcHour + lng / 15) % 24 + 24) % 24;
+  }
+
+  function updateAtmosphereForPosition(pos) {
+    const el = $('#flight-atmosphere');
+    if (!el || !pos) return;
+    const hour = estimateLocalHour(pos[1]);
+    const isNight = hour < 6 || hour >= 19;
+    el.classList.toggle('atmosphere-night', isNight);
+    el.classList.toggle('atmosphere-day', !isNight);
+  }
+
+  function spawnCloudWisps() {
+    const layer = $('#cloud-layer');
+    if (!layer) return;
+    layer.innerHTML = '';
+    const count = 4;
+    for (let i = 0; i < count; i++) {
+      const el = document.createElement('div');
+      el.className = 'cloud-wisp';
+      const size = 90 + Math.random() * 150;
+      el.style.width = `${size}px`;
+      el.style.height = `${size * 0.34}px`;
+      el.style.top = `${8 + Math.random() * 55}%`;
+      el.style.animationDuration = `${55 + Math.random() * 35}s`;
+      el.style.animationDelay = `-${Math.random() * 60}s`;
+      layer.appendChild(el);
+    }
+  }
+
+  function activateFlightAtmosphere(route) {
+    spawnCloudWisps();
+    updateAtmosphereForPosition(route.o);
+    $('#flight-atmosphere').classList.add('atmosphere-active');
+    $('#cloud-layer').classList.add('cloud-layer-active');
+  }
+
+  function deactivateFlightAtmosphere() {
+    $('#flight-atmosphere').classList.remove('atmosphere-active', 'atmosphere-night', 'atmosphere-day');
+    $('#cloud-layer').classList.remove('cloud-layer-active');
+  }
+
+  /* ---------------------------------------------------------
      State
   --------------------------------------------------------- */
   const state = {
     selectedRoute: ROUTES[1],
     selectedSeat: null,
-    selectedPurpose: 'focus',
+    selectedPurpose: 'work',
     focusMinutes: 30, // user-set session length, independent of the route's real-world duration
     occupiedSeats: new Set(),
     currentArc: null,
@@ -139,14 +190,15 @@
       pauseStartedAt: null, // performance.now() when the current pause began
     },
     audio: { ctx: null, volume: 0.35, activeKind: null },
+    hud: { unit: 'km' },
   };
 
   const FOCUS_TAGS = [
-    { id: 'focus', label: 'Focus', icon: 'target' },
-    { id: 'work', label: 'Work', icon: 'briefcase' },
-    { id: 'meditate', label: 'Meditate', icon: 'flower-2' },
-    { id: 'read', label: 'Read', icon: 'book-open' },
-    { id: 'exercise', label: 'Exercise', icon: 'dumbbell' },
+    { id: 'read', label: 'Read', emoji: '📖' },
+    { id: 'exercise', label: 'Exercise', emoji: '🏋️' },
+    { id: 'work', label: 'Work', emoji: '💼' },
+    { id: 'study', label: 'Study', emoji: '📚' },
+    { id: 'hobby', label: 'Hobby', emoji: '🎨' },
   ];
   let ticketMeta = { flightNo: randomFlightNo() };
 
@@ -226,6 +278,16 @@
     });
   }
 
+  // IATA-code badge marker for recommended nearby/world airports
+  function airportBadgeIcon(code) {
+    return L.divIcon({
+      className: '',
+      html: `<div class="geo-pin-badge">${code}</div>`,
+      iconSize: [44, 20],
+      iconAnchor: [22, 10],
+    });
+  }
+
   // Real airplane silhouette (Google Material "flight" glyph, nose pointing up = bearing 0)
   const PLANE_SVG_PATH = 'M21,16V14L13,9V3.5C13,2.67 12.33,2 11.5,2C10.67,2 10,2.67 10,3.5V9L2,14V16L10,13.5V19L7.5,20.5V22L11.5,21L15.5,22V20.5L13,19V13.5L21,16Z';
 
@@ -302,27 +364,48 @@
     window.addEventListener('resize', () => map.invalidateSize());
   }
 
+  // Reachability radar circle — a persistent layer (not part of the
+  // clear/rebuild cycle) so it can be repositioned/resized instantly on
+  // every ruler-scroll tick without redrawing the rest of the map.
+  let radarCircle = null;
+
+  function ensureRadarCircle() {
+    if (!map) return null;
+    if (!radarCircle) {
+      radarCircle = L.circle(state.selectedRoute.o, {
+        radius: 0,
+        color: '#10B981', weight: 1.5, opacity: 0.55,
+        dashArray: '5,8', fill: true, fillColor: '#10B981', fillOpacity: 0.035,
+        interactive: false,
+      }).addTo(map);
+    }
+    return radarCircle;
+  }
+
+  function updateRadarCircle(minutesOverride) {
+    const circle = ensureRadarCircle();
+    if (!circle) return;
+    const minutes = minutesOverride != null ? minutesOverride : state.focusMinutes;
+    const radiusKm = (minutes / 60) * 850;
+    circle.setLatLng(state.selectedRoute.o);
+    circle.setRadius(radiusKm * 1000);
+    circle.bringToBack();
+  }
+
   function drawRoutePreview(route) {
     if (!map) return;
     routeLayerGroup.clearLayers();
+    updateRadarCircle();
 
-    // Reachability radius: how far a real (non-warped) flight could travel
-    // within the current focus session at realistic cruising speed.
-    const radiusKm = (state.focusMinutes / 60) * 850;
-    L.circle(route.o, {
-      radius: radiusKm * 1000,
-      color: '#10B981', weight: 1.5, opacity: 0.45,
-      dashArray: '4,8', fill: true, fillColor: '#10B981', fillOpacity: 0.03,
-      interactive: false,
-    }).addTo(routeLayerGroup);
-
-    // Recommended airports around the world (dim dots); the active route's
-    // own destination is drawn separately below as the highlighted marker.
+    // Recommended nearby/world airports as clickable IATA badges; the
+    // active route's own destination is drawn separately as the bright
+    // highlighted marker below.
     const seenDest = new Set();
     ROUTES.forEach((r) => {
       if (seenDest.has(r.dest) || (r.dest === route.dest && r.origin === route.origin)) return;
       seenDest.add(r.dest);
-      L.marker(r.d, { icon: geoIcon('world'), interactive: false }).addTo(routeLayerGroup);
+      const marker = L.marker(r.d, { icon: airportBadgeIcon(r.dest), interactive: true }).addTo(routeLayerGroup);
+      marker.on('click', () => selectRoute(r));
     });
 
     const path = buildFlightPath(route.o, route.d);
@@ -473,7 +556,7 @@
     state.focusMinutes = minutes;
     renderRouteCarousel();
     updateExploreSummary();
-    drawRoutePreview(state.selectedRoute); // refresh the reachability radius
+    updateRadarCircle();
   }
 
   function initDurationRuler() {
@@ -483,6 +566,7 @@
     ruler.addEventListener('scroll', () => {
       const nearest = getNearestRulerTick();
       highlightRulerTick(nearest);
+      if (nearest) updateRadarCircle(parseInt(nearest.dataset.minutes, 10)); // live radar feedback
       clearTimeout(commitTimer);
       commitTimer = setTimeout(() => commitFocusMinutes(nearest), 180);
     }, { passive: true });
@@ -583,7 +667,7 @@
       btn.className = 'focus-tag-btn';
       btn.dataset.id = tag.id;
       if (state.selectedPurpose === tag.id) btn.classList.add('selected');
-      btn.innerHTML = `<i data-lucide="${tag.icon}"></i><span>${tag.label}</span>`;
+      btn.innerHTML = `<span class="focus-tag-emoji">${tag.emoji}</span><span>${tag.label}</span>`;
       btn.addEventListener('click', () => {
         state.selectedPurpose = tag.id;
         $$('.focus-tag-btn').forEach((b) => b.classList.toggle('selected', b.dataset.id === tag.id));
@@ -757,6 +841,9 @@
     const initialBearing = bearingBetween(startPos, pointAtProgress(state.currentArc, 0.01));
     createPlaneMarker(startPos, initialBearing);
 
+    activateFlightAtmosphere(route);
+    playTakeoffChime();
+
     updateHudText();
     clearInterval(state.timer.intervalId);
     state.timer.intervalId = setInterval(tickTimer, 1000);
@@ -772,11 +859,15 @@
     }
   }
 
+  const KM_TO_MI = 0.621371;
+
   function updateHudText() {
     const route = state.selectedRoute;
     const total = state.timer.totalSeconds || 1;
     const elapsed = total - state.timer.remainingSeconds;
     const progress = Math.min(1, Math.max(0, elapsed / total));
+    const unit = state.hud.unit;
+    const toDisplayDistance = (km) => (unit === 'mi' ? km * KM_TO_MI : km);
 
     $('#hud-timer').textContent = fmtTimer(state.timer.remainingSeconds);
     $('#hud-timer').classList.toggle('is-paused', state.timer.paused);
@@ -784,11 +875,18 @@
     $('#hud-progress-pct').textContent = Math.round(progress * 100);
 
     const remainingKm = Math.max(0, route.km * (1 - progress));
-    $('#hud-distance').textContent = fmtKm(remainingKm);
+    $('#hud-distance').textContent = fmtKm(toDisplayDistance(remainingKm));
+    $('#hud-unit-label').textContent = unit;
 
-    const baseSpeed = route.km / (route.minutes / 60);
+    const baseSpeedKmh = route.km / (route.minutes / 60);
     const jitter = 1 + Math.sin(elapsed / 23) * 0.035;
-    $('#hud-speed').textContent = fmtKm(progress >= 1 ? 0 : baseSpeed * jitter);
+    const speedKmh = progress >= 1 ? 0 : baseSpeedKmh * jitter;
+    $('#hud-speed').textContent = fmtKm(toDisplayDistance(speedKmh));
+    $('#hud-speed-unit').textContent = unit === 'mi' ? 'mph' : 'km/h';
+
+    if (state.currentArc) {
+      updateAtmosphereForPosition(pointAtProgress(state.currentArc, progress));
+    }
   }
 
   function togglePause() {
@@ -837,9 +935,21 @@
 
     $('#landing-desc').textContent = `${fmtKm(route.km)} km 마일리지가 적립되었습니다.`;
     $('#landing-stat-time').textContent = fmtMinutes(state.focusMinutes);
-    $('#landing-stat-km').textContent = `${fmtKm(route.km)} km`;
+    $('#landing-stat-km').textContent = `+${fmtKm(route.km)} km`;
+    renderPassportStamp(route);
     openModal($('#landing-modal'));
     launchConfetti();
+  }
+
+  function renderPassportStamp(route) {
+    const wrap = $('#passport-stamp-wrap');
+    wrap.innerHTML = `
+      <div class="stamp-ring">
+        <span class="stamp-top-text">PomoFlight · Arrived</span>
+        <span class="stamp-code">${route.dest}</span>
+        <span class="stamp-date">${todayLabel()}</span>
+      </div>
+    `;
   }
 
   function returnToGate() {
@@ -849,6 +959,7 @@
     stopAnimationLoop();
     removePlaneMarker();
     stopAmbient();
+    deactivateFlightAtmosphere();
 
     $('#flight-hud').classList.add('hidden');
     $('#topbar-brand').classList.remove('topbar-fade-hidden');
@@ -894,7 +1005,7 @@
           <div class="history-route">${h.origin} → ${h.dest} ${h.seat ? `· ${h.seat}` : ''}</div>
           <div class="history-meta">
             <span>${h.dateLabel} · ${fmtMinutes(h.minutes)}</span>
-            ${purposeTag ? `<span class="history-purpose"><i data-lucide="${purposeTag.icon}"></i>${purposeTag.label}</span>` : ''}
+            ${purposeTag ? `<span class="history-purpose">${purposeTag.emoji} ${purposeTag.label}</span>` : ''}
           </div>
         </div>
         <div class="history-km">+${fmtKm(h.km)} km</div>
@@ -937,14 +1048,9 @@
     return state.audio.ctx;
   }
 
-  function playLandingChime() {
+  function playChimeSequence(notes) {
     const ctx = getAudioCtx();
     const now = ctx.currentTime;
-    const notes = [
-      { freq: 987.77, start: 0.0, dur: 0.55 },
-      { freq: 783.99, start: 0.35, dur: 0.7 },
-      { freq: 659.25, start: 0.85, dur: 0.9 },
-    ];
     notes.forEach((n) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -959,6 +1065,23 @@
       osc.start(t0);
       osc.stop(t0 + n.dur + 0.05);
     });
+  }
+
+  // Classic two-tone "bing-bong" cabin chime, played on departure.
+  function playTakeoffChime() {
+    playChimeSequence([
+      { freq: 659.25, start: 0.0, dur: 0.5 },  // E5
+      { freq: 523.25, start: 0.28, dur: 0.7 }, // C5
+    ]);
+  }
+
+  // Fuller three-tone arrival chime, played on landing.
+  function playLandingChime() {
+    playChimeSequence([
+      { freq: 987.77, start: 0.0, dur: 0.55 },
+      { freq: 783.99, start: 0.35, dur: 0.7 },
+      { freq: 659.25, start: 0.85, dur: 0.9 },
+    ]);
   }
 
   /* ---------------------------------------------------------
@@ -1250,6 +1373,10 @@
     $('#start-boarding-btn').addEventListener('click', beginBoardingDeparture);
 
     $('#pause-btn').addEventListener('click', togglePause);
+    $('#hud-unit-toggle').addEventListener('click', () => {
+      state.hud.unit = state.hud.unit === 'km' ? 'mi' : 'km';
+      updateHudText();
+    });
     $('#abort-btn').addEventListener('click', () => openModal($('#abort-modal')));
     $('#abort-cancel-btn').addEventListener('click', () => closeModal($('#abort-modal')));
     $('#abort-confirm-btn').addEventListener('click', () => {
