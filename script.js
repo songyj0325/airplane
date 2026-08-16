@@ -8,8 +8,6 @@
   /* ---------------------------------------------------------
      Data
   --------------------------------------------------------- */
-  const ICN = [37.4602, 126.4407];
-
   function haversineKm(o, d) {
     const R = 6371;
     const dLat = ((d[0] - o[0]) * Math.PI) / 180;
@@ -77,7 +75,9 @@
     ['SVO', 'Moscow', 55.9726, 37.4146], ['LED', 'St Petersburg', 59.8003, 30.2625],
     ['NCE', 'Nice', 43.6584, 7.2159], ['BER', 'Berlin', 52.3667, 13.5033],
     ['HAM', 'Hamburg', 53.6304, 9.9882], ['MLA', 'Malta', 35.8575, 14.4775],
-    // Asia / Korea (32, excluding the ICN hub itself)
+    // Asia / Korea (33, including ICN -- the default departure, but any
+    // airport in this file can become the origin via the departure picker)
+    ['ICN', 'Seoul', 37.4602, 126.4407],
     ['GMP', 'Gimpo', 37.5583, 126.7906], ['PUS', 'Busan', 35.1795, 128.9382],
     ['CJU', 'Jeju', 33.5113, 126.4930], ['YNY', 'Yangyang', 38.0611, 128.6692],
     ['TAE', 'Daegu', 35.8941, 128.6589], ['KWJ', 'Gwangju', 35.1264, 126.8089],
@@ -116,17 +116,35 @@
   ];
 
   const AIRPORTS = AIRPORT_DATA.map(([code, city, lat, lng]) => ({ code, city, lat, lng }));
+  function airportByCode(code) { return AIRPORTS.find((a) => a.code === code); }
 
-  // Every route originates from Seoul/ICN; km + minutes are derived from the
-  // coordinates so the dataset (and the radar circle) never drift out of sync.
-  const ROUTES = AIRPORTS.map((a) => {
-    const o = ICN, d = [a.lat, a.lng];
-    const km = Math.round(haversineKm(o, d));
-    return {
-      origin: 'ICN', dest: a.code, originCity: 'Seoul', destCity: a.city,
-      o, d, km, minutes: minutesForDistance(km),
-    };
-  });
+  // Curated subset offered in the "Select Departure" picker -- major hubs
+  // spanning every region, rather than all 150+ (which would make for an
+  // unwieldy dropdown). Any of these can become the route origin; every
+  // other airport in AIRPORTS becomes a reachable destination from it.
+  const DEPARTURE_CODES = [
+    'ICN', 'GMP', 'PUS', 'CJU', 'HND', 'NRT', 'KIX', 'PEK', 'PVG', 'TPE',
+    'HKG', 'SIN', 'BKK', 'JFK', 'LAX', 'SFO', 'LHR', 'CDG', 'FRA', 'DXB', 'SYD',
+  ];
+
+  // Builds the full route set from a given origin airport to every other
+  // airport in AIRPORTS -- km/minutes are derived from real coordinates via
+  // Haversine, so switching origins keeps the dataset (and the radar circle)
+  // mathematically consistent with wherever departure is currently set.
+  function buildRoutesFromOrigin(originCode) {
+    const origin = airportByCode(originCode);
+    const o = [origin.lat, origin.lng];
+    return AIRPORTS.filter((a) => a.code !== originCode).map((a) => {
+      const d = [a.lat, a.lng];
+      const km = Math.round(haversineKm(o, d));
+      return {
+        origin: originCode, dest: a.code, originCity: origin.city, destCity: a.city,
+        o, d, km, minutes: minutesForDistance(km),
+      };
+    });
+  }
+
+  let ROUTES = buildRoutesFromOrigin('ICN');
 
   const STORAGE_STATS = 'pomoflight.stats.v1';
   const STORAGE_HISTORY = 'pomoflight.history.v1';
@@ -220,14 +238,20 @@
     return pts;
   }
 
+  // Hard ceiling for any camera zoom applied while flight-tracking is
+  // active, so the view never pushes into tile levels where ArcGIS
+  // World_Imagery coverage gets thin/broken or panning starts to stutter.
+  const MAX_FLIGHT_ZOOM = 16;
+
   function computeFlightZoom(km) {
-    return km < 2000 ? 14 : 13;
+    return Math.min(MAX_FLIGHT_ZOOM, km < 2000 ? 14 : 13);
   }
 
   /* ---------------------------------------------------------
      State
   --------------------------------------------------------- */
   const state = {
+    originCode: 'ICN',
     selectedRoute: ROUTES.find((r) => r.dest === 'HND') || ROUTES[0],
     selectedSeat: null,
     selectedPurpose: 'work',
@@ -244,6 +268,7 @@
     },
     audio: { ctx: null, volume: 0.35, activeKind: null },
     hud: { unit: 'km' },
+    pureModeActive: false,
   };
 
   const FOCUS_TAGS = [
@@ -266,6 +291,21 @@
   function persistHistory() { localStorage.setItem(STORAGE_HISTORY, JSON.stringify(state.history.slice(0, 50))); }
 
   function refreshIcons() { if (window.lucide) window.lucide.createIcons(); }
+
+  let toastTimeoutId = null;
+  function showToast(message) {
+    let el = document.getElementById('app-toast');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'app-toast';
+      el.className = 'app-toast';
+      document.body.appendChild(el);
+    }
+    el.textContent = message;
+    el.classList.add('visible');
+    clearTimeout(toastTimeoutId);
+    toastTimeoutId = setTimeout(() => el.classList.remove('visible'), 3200);
+  }
 
   /* ---------------------------------------------------------
      Formatting helpers
@@ -327,7 +367,7 @@
   /* ---------------------------------------------------------
      Map
   --------------------------------------------------------- */
-  let map, satelliteLayer, darkLayer, currentMapStyle = 'satellite';
+  let map, satelliteLayer, darkLayer, osmLayer, currentMapStyle = 'satellite';
   let routeLayerGroup, progressPolyline, remainderPolyline, originMarker, destMarker;
   // Recommendation markers (world airport badges) are explore-only: they're
   // removed from the map entirely during flight so Leaflet isn't repositioning
@@ -338,12 +378,21 @@
   let recommendationLayerGroup;
   const airportMarkerCache = new Map(); // code -> L.Marker
 
+  // Built once from the full airport list (not ROUTES) so the same cache
+  // survives a departure change -- only which code is "self" (the origin,
+  // hidden) and which fall within the radius changes, never the marker set.
   function ensureAirportBadges() {
     if (airportMarkerCache.size > 0) return;
-    ROUTES.forEach((r) => {
-      const marker = L.marker(r.d, { icon: airportBadgeIcon(r.dest), interactive: true }).addTo(recommendationLayerGroup);
-      marker.on('click', () => selectRoute(r));
-      airportMarkerCache.set(r.dest, marker);
+    AIRPORTS.forEach((a) => {
+      const marker = L.marker([a.lat, a.lng], { icon: airportBadgeIcon(a.code), interactive: true }).addTo(recommendationLayerGroup);
+      // Looked up against the live ROUTES binding at click time (not
+      // captured here) so this keeps working correctly after setOrigin()
+      // reassigns ROUTES to a different origin's route set.
+      marker.on('click', () => {
+        const route = ROUTES.find((r) => r.dest === a.code);
+        if (route) selectRoute(route);
+      });
+      airportMarkerCache.set(a.code, marker);
     });
   }
 
@@ -357,9 +406,11 @@
   // focus-duration-derived reachable radius -- the map should "unlock" more
   // destinations as the ruler grows (from a couple nearby at 30m to most of
   // the world at 14h), instead of showing all 150+ codes at once regardless
-  // of the selected duration.
+  // of the selected duration. The current origin's own badge is always
+  // hidden (it gets its own marker via drawRoutePreview instead).
   function updateBadgeVisibility(radiusKm) {
     if (airportMarkerCache.size === 0) return;
+    setBadgeHidden(state.originCode, true);
     ROUTES.forEach((r) => {
       setBadgeHidden(r.dest, r.dest === state.selectedRoute.dest || r.km > radiusKm);
     });
@@ -397,11 +448,18 @@
   }
 
   let planeMarker = null;
+  // Unwrapped (can run outside 0-360) so the rotor's CSS transition always
+  // takes the shortest turn -- without this, a raw `rotate(rawDeg % 360)`
+  // snap across the 0/360 boundary (e.g. 358deg -> 3deg) would spin the
+  // icon almost all the way around every time it happens, which is what
+  // actually read as violent shaking rather than a calm heading change.
+  let lastPlaneBearing = 0;
 
   function createPlaneMarker(latlng, bearingDeg) {
     if (!map) return;
     removePlaneMarker();
     planeMarker = L.marker(latlng, { icon: planeDivIcon(), zIndexOffset: 1000, interactive: false }).addTo(map);
+    lastPlaneBearing = bearingDeg; // fresh baseline -- no transition-in from a stale previous flight's heading
     setPlaneBearing(bearingDeg);
   }
 
@@ -409,7 +467,10 @@
     if (!planeMarker) return;
     const el = planeMarker.getElement();
     const rotor = el && el.querySelector('.plane-marker-rotor');
-    if (rotor) rotor.style.transform = `rotate(${bearingDeg}deg)`;
+    if (!rotor) return;
+    const delta = ((bearingDeg - lastPlaneBearing) % 360 + 540) % 360 - 180; // shortest signed turn, in (-180, 180]
+    lastPlaneBearing += delta;
+    rotor.style.transform = `rotate(${lastPlaneBearing}deg)`;
   }
 
   function removePlaneMarker() {
@@ -436,18 +497,51 @@
       worldCopyJump: false,
     });
 
+    // A failed ArcGIS tile renders as an actual PNG with "Map data not yet
+    // available" baked into the pixels (it's a real image, not a 404) --
+    // errorTileUrl swaps every failed tile for a transparent pixel instead
+    // of letting that text show up on the map.
+    const TRANSPARENT_TILE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+
     satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
       attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics',
       maxZoom: 18,
       maxNativeZoom: 17, // beyond this, Leaflet upscales the last real tile instead of requesting missing ones
+      errorTileUrl: TRANSPARENT_TILE,
     });
     darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
       subdomains: 'abcd',
       maxZoom: 18,
       maxNativeZoom: 17,
+      errorTileUrl: TRANSPARENT_TILE,
+    });
+    osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      subdomains: 'abc',
+      maxZoom: 19,
+      maxNativeZoom: 19,
+      errorTileUrl: TRANSPARENT_TILE,
     });
     satelliteLayer.addTo(map);
+
+    // If a whole layer is broadly unreachable (network/CDN blocked, not
+    // just a few missing edge tiles), cascade to the next one automatically
+    // rather than leaving the user staring at a blank/broken map: satellite
+    // -> CartoDB Dark Matter -> plain OpenStreetMap.
+    function attachTileFallback(layer, styleWhenActive, nextStyle, errorThreshold) {
+      let errorCount = 0;
+      let triggered = false;
+      layer.on('tileerror', () => {
+        errorCount++;
+        if (triggered || errorCount < errorThreshold || currentMapStyle !== styleWhenActive) return;
+        triggered = true;
+        switchMapStyle(nextStyle);
+        showToast('지도 타일을 불러오지 못해 다른 지도로 전환했습니다.');
+      });
+    }
+    attachTileFallback(satelliteLayer, 'satellite', 'dark', 8);
+    attachTileFallback(darkLayer, 'dark', 'osm', 8);
 
     routeLayerGroup = L.layerGroup().addTo(map);
     recommendationLayerGroup = L.layerGroup().addTo(map);
@@ -527,24 +621,31 @@
     fitMapToRouteAndRadar(path, 1.3);
   }
 
-  function initMapStyleToggle() {
+  function styleLayerFor(style) {
+    return style === 'satellite' ? satelliteLayer : style === 'dark' ? darkLayer : osmLayer;
+  }
+
+  // Shared by the manual toggle button and the automatic tileerror fallback
+  // cascade in initMap(), so both paths keep the button's icon/state in sync.
+  function switchMapStyle(style) {
+    if (!map || style === currentMapStyle) return;
+    map.removeLayer(styleLayerFor(currentMapStyle));
+    styleLayerFor(style).addTo(map);
+    currentMapStyle = style;
     const btn = $('#map-style-toggle');
-    btn.addEventListener('click', () => {
-      if (!map) return;
-      if (currentMapStyle === 'satellite') {
-        map.removeLayer(satelliteLayer);
-        darkLayer.addTo(map);
-        currentMapStyle = 'dark';
-        btn.dataset.active = 'true';
-        btn.innerHTML = '<i data-lucide="moon" class="w-4 h-4"></i>';
-      } else {
-        map.removeLayer(darkLayer);
-        satelliteLayer.addTo(map);
-        currentMapStyle = 'satellite';
-        btn.dataset.active = 'false';
-        btn.innerHTML = '<i data-lucide="satellite" class="w-4 h-4"></i>';
-      }
+    if (btn) {
+      btn.dataset.active = style !== 'satellite' ? 'true' : 'false';
+      btn.innerHTML = style === 'satellite' ? '<i data-lucide="satellite" class="w-4 h-4"></i>'
+        : style === 'dark' ? '<i data-lucide="moon" class="w-4 h-4"></i>'
+        : '<i data-lucide="map" class="w-4 h-4"></i>';
       refreshIcons();
+    }
+  }
+
+  function initMapStyleToggle() {
+    $('#map-style-toggle').addEventListener('click', () => {
+      if (!map) return;
+      switchMapStyle(currentMapStyle === 'satellite' ? 'dark' : 'satellite');
     });
   }
 
@@ -577,6 +678,43 @@
     renderRouteCarousel();
     updateExploreSummary();
     drawRoutePreview(route);
+  }
+
+  // Rebuilds the whole route set around a new departure airport -- every
+  // km/minutes figure, the radar radius, and which badges are unlocked all
+  // recompute from the new origin's coordinates via the same functions
+  // already used for the ICN default, so nothing drifts out of sync.
+  function setOrigin(code) {
+    if (!code || code === state.originCode) return;
+    state.originCode = code;
+    ROUTES = buildRoutesFromOrigin(code);
+    state.selectedRoute = ROUTES.find((r) => r.dest === 'HND') || ROUTES[0];
+    state.selectedSeat = null;
+    state.occupiedSeats = generateOccupiedSeats();
+    ticketMeta = { flightNo: randomFlightNo() };
+    const select = $('#departure-select');
+    if (select) select.value = code;
+    renderRouteCarousel();
+    updateExploreSummary();
+    drawRoutePreview(state.selectedRoute);
+  }
+
+  function renderDepartureSelect() {
+    const select = $('#departure-select');
+    select.innerHTML = '';
+    DEPARTURE_CODES.forEach((code) => {
+      const airport = airportByCode(code);
+      const opt = document.createElement('option');
+      opt.value = code;
+      opt.textContent = `${code} — ${airport.city}`;
+      select.appendChild(opt);
+    });
+    select.value = state.originCode;
+  }
+
+  function initDepartureSelect() {
+    renderDepartureSelect();
+    $('#departure-select').addEventListener('change', (e) => setOrigin(e.target.value));
   }
 
   function renderRouteCarousel() {
@@ -856,7 +994,7 @@
      Check-in cinematic: swoop into the departure runway,
      then climb out to cruising altitude before tracking begins
   --------------------------------------------------------- */
-  const RUNWAY_ZOOM = 16;
+  const RUNWAY_ZOOM = MAX_FLIGHT_ZOOM;
   const RUNWAY_ZOOM_DURATION = 1.8;
   const CLIMB_DURATION = 1.2;
 
@@ -931,7 +1069,7 @@
     const now = performance.now();
     if (force || now - lastCameraUpdateTime >= CAMERA_UPDATE_INTERVAL_MS) {
       lastCameraUpdateTime = now;
-      map.setView(pos, map.getZoom(), { animate: false });
+      map.setView(pos, Math.min(map.getZoom(), MAX_FLIGHT_ZOOM), { animate: false });
       const idx = Math.floor(progress * (arc.length - 1));
       progressPolyline.setLatLngs(arc.slice(0, idx + 1).concat([pos]));
     }
@@ -971,6 +1109,8 @@
     createPlaneMarker(startPos, initialBearing);
 
     playTakeoffChime();
+    setTimeout(announceDeparture, 1300);
+    scheduleNextPeriodicChime();
 
     updateHudText();
     clearInterval(state.timer.intervalId);
@@ -1002,6 +1142,16 @@
     $('#hud-progress-fill').style.width = `${progress * 100}%`;
     $('#hud-progress-pct').textContent = Math.round(progress * 100);
 
+    // Pure Mode mirrors the same timer/progress values -- kept in sync
+    // unconditionally (cheap DOM writes) so the overlay is never stale
+    // the instant it's toggled on.
+    const pct = Math.round(progress * 100);
+    $('#pure-mode-timer').textContent = fmtTimer(state.timer.remainingSeconds);
+    $('#pure-mode-timer').classList.toggle('is-paused', state.timer.paused);
+    $('#pure-mode-progress-fill').style.width = `${progress * 100}%`;
+    $('#pure-mode-plane-icon').style.left = `${progress * 100}%`;
+    $('#pure-mode-pct').textContent = pct;
+
     const remainingKm = Math.max(0, route.km * (1 - progress));
     $('#hud-distance').textContent = fmtKm(toDisplayDistance(remainingKm));
     $('#hud-unit-label').textContent = unit;
@@ -1019,10 +1169,12 @@
     if (state.timer.paused) {
       state.timer.pauseStartedAt = performance.now();
       stopAnimationLoop();
+      stopPeriodicChimes();
     } else {
       state.timer.pausedAccum += performance.now() - state.timer.pauseStartedAt;
       state.timer.pauseStartedAt = null;
       startAnimationLoop();
+      scheduleNextPeriodicChime();
     }
     $('#pause-btn-label').textContent = state.timer.paused ? 'Resume' : 'Pause';
     $('#pause-icon').classList.toggle('hidden', state.timer.paused);
@@ -1034,6 +1186,8 @@
     clearInterval(state.timer.intervalId);
     state.timer.running = false;
     stopAnimationLoop();
+    stopPeriodicChimes();
+    exitPureMode();
     updatePlanePosition(1, true);
 
     const route = state.selectedRoute;
@@ -1050,7 +1204,7 @@
     persistHistory();
     updateStatsSummary();
 
-    playLandingChime();
+    announceArrival(route);
 
     $('#landing-desc').textContent = `${fmtKm(route.km)} km 마일리지가 적립되었습니다.`;
     $('#landing-stat-time').textContent = fmtMinutes(state.focusMinutes);
@@ -1076,6 +1230,9 @@
     state.timer.running = false;
     state.timer.paused = false;
     stopAnimationLoop();
+    stopPeriodicChimes();
+    stopAnnouncements();
+    exitPureMode();
     removePlaneMarker();
     stopAmbient();
 
@@ -1188,7 +1345,7 @@
     return state.audio.ctx;
   }
 
-  function playChimeSequence(notes) {
+  function playChimeSequence(notes, peakGain = 0.35) {
     const ctx = getAudioCtx();
     const now = ctx.currentTime;
     notes.forEach((n) => {
@@ -1198,7 +1355,7 @@
       osc.frequency.value = n.freq;
       const t0 = now + n.start;
       gain.gain.setValueAtTime(0, t0);
-      gain.gain.linearRampToValueAtTime(0.35, t0 + 0.04);
+      gain.gain.linearRampToValueAtTime(peakGain, t0 + 0.04);
       gain.gain.exponentialRampToValueAtTime(0.001, t0 + n.dur);
       osc.connect(gain);
       gain.connect(ctx.destination);
@@ -1222,6 +1379,117 @@
       { freq: 783.99, start: 0.35, dur: 0.7 },
       { freq: 659.25, start: 0.85, dur: 0.9 },
     ]);
+  }
+
+  // Soft two-tone "ding~dong" cabin bell, modeled on a real cabin PA chime:
+  // one unhurried "ding" (C5) that's still ringing when the lower "dong"
+  // (G4) enters underneath it, then a slow 1.2s decay -- not a fast
+  // "ding-ding-dong-dong" repeat. Gentler/quieter than the takeoff/landing
+  // chimes above; used to precede PA announcements and for the periodic
+  // in-flight cabin bell.
+  function playDingDong() {
+    playChimeSequence([
+      { freq: 523.25, start: 0.0, dur: 0.6 },  // C5 -- "ding"
+      { freq: 392.00, start: 0.55, dur: 1.2 }, // G4 -- "dong", slow gentle decay
+    ], 0.2);
+  }
+
+  /* ---------------------------------------------------------
+     Captain's PA announcements (Web Speech API)
+  --------------------------------------------------------- */
+  // Checked in priority order against each voice's name -- covers the
+  // common male English voices across Chrome/Edge (Windows), Safari/Chrome
+  // (macOS/iOS), and Android TTS. Falls through to a name-based "male"
+  // heuristic, then to any English voice, if none of these are installed.
+  const PREFERRED_MALE_VOICE_NAMES = [
+    'Google UK English Male',
+    'Microsoft David',
+    'Microsoft Guy',
+    'Microsoft Mark',
+    'Daniel',   // macOS/iOS en-GB male
+    'Alex',     // macOS en-US male (classic default)
+    'Fred',     // macOS en-US male
+    'Aaron',    // Android en-US male
+  ];
+
+  function pickCaptainVoice(voices) {
+    for (const name of PREFERRED_MALE_VOICE_NAMES) {
+      const match = voices.find((v) => v.name.includes(name));
+      if (match) return match;
+    }
+    const byHeuristic = voices.find((v) => /^en/i.test(v.lang) && /male/i.test(v.name) && !/female/i.test(v.name));
+    if (byHeuristic) return byHeuristic;
+    return voices.find((v) => /en-US|en-GB/.test(v.lang)) || null;
+  }
+
+  // Voice lists load asynchronously in most browsers -- getVoices() can
+  // return [] on the very first call. Priming it once at startup (rather
+  // than only at announcement time, well after the page has settled) makes
+  // it far more likely the male-voice preference below actually has a
+  // populated list to search by the time a flight starts.
+  function primeSpeechVoices() {
+    const synth = window.speechSynthesis;
+    if (!synth) return;
+    if (synth.getVoices().length === 0) {
+      synth.addEventListener('voiceschanged', () => synth.getVoices(), { once: true });
+    }
+  }
+
+  function speakAnnouncement(text) {
+    const synth = window.speechSynthesis;
+    if (!synth) return;
+    try {
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = 'en-US';
+      utter.rate = 0.9;    // measured, unhurried cabin-announcement pace
+      utter.pitch = 0.85;  // lowered for a deeper, calmer captain's voice
+      utter.volume = Math.max(0.15, state.audio.volume);
+      const voice = pickCaptainVoice(synth.getVoices());
+      if (voice) utter.voice = voice;
+      synth.cancel(); // avoid stacking announcements if one is already queued
+      synth.speak(utter);
+    } catch (e) { /* Web Speech unsupported/blocked -- the chime alone still played */ }
+  }
+
+  function stopAnnouncements() {
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+  }
+
+  function announceDeparture() {
+    const route = state.selectedRoute;
+    playDingDong();
+    setTimeout(() => {
+      speakAnnouncement(`Welcome aboard PomoFlight. We are currently flying to our destination, ${route.destCity}. Please sit back, relax, and enjoy your focus session.`);
+    }, 1400);
+  }
+
+  function announceArrival(route) {
+    playLandingChime();
+    setTimeout(() => {
+      speakAnnouncement(`We have arrived at ${route.destCity}. Thank you for flying with PomoFlight, and congratulations on completing your focus session.`);
+    }, 1600);
+  }
+
+  // Gentle, randomly-spaced cabin bell during the flight -- stops itself as
+  // landing approaches so it never overlaps the arrival chime, and pauses
+  // cleanly alongside the focus timer.
+  let periodicChimeTimeoutId = null;
+  function scheduleNextPeriodicChime() {
+    clearTimeout(periodicChimeTimeoutId);
+    if (!state.timer.running || state.timer.paused) return;
+    const remaining = state.timer.totalSeconds - getElapsedMs() / 1000;
+    const MIN_GAP_S = 60, MAX_GAP_S = 180, SAFETY_MARGIN_S = 20;
+    if (remaining < SAFETY_MARGIN_S + MIN_GAP_S) return; // too close to landing
+    const gapS = Math.min(MAX_GAP_S, remaining - SAFETY_MARGIN_S);
+    const delayMs = (MIN_GAP_S + Math.random() * Math.max(0, gapS - MIN_GAP_S)) * 1000;
+    periodicChimeTimeoutId = setTimeout(() => {
+      if (state.timer.running && !state.timer.paused) playDingDong();
+      scheduleNextPeriodicChime();
+    }, delayMs);
+  }
+  function stopPeriodicChimes() {
+    clearTimeout(periodicChimeTimeoutId);
+    periodicChimeTimeoutId = null;
   }
 
   /* ---------------------------------------------------------
@@ -1503,6 +1771,67 @@
   }
 
   /* ---------------------------------------------------------
+     Full Screen & Pure Mode
+     Pure Mode is a distraction-free overlay (timer + progress + % only)
+     shown on top of the flight HUD; entering it also requests real browser
+     fullscreen where available, but the overlay itself still works if
+     fullscreen is denied/unsupported.
+  --------------------------------------------------------- */
+  async function enterPureMode() {
+    if (state.pureModeActive) return;
+    state.pureModeActive = true;
+    $('#pure-mode-layer').classList.remove('hidden');
+    document.body.classList.add('pure-mode-active');
+    updateHudText();
+    try {
+      if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+      }
+    } catch (e) { /* fullscreen blocked/unsupported -- pure mode still works windowed */ }
+  }
+
+  function exitPureMode() {
+    if (!state.pureModeActive) return;
+    state.pureModeActive = false;
+    $('#pure-mode-layer').classList.add('hidden');
+    document.body.classList.remove('pure-mode-active');
+    if (document.fullscreenElement) {
+      Promise.resolve(document.exitFullscreen()).catch(() => {});
+    }
+  }
+
+  function togglePureMode() {
+    if (state.pureModeActive) exitPureMode(); else enterPureMode();
+  }
+
+  function initPureMode() {
+    $('#pure-mode-toggle-btn').addEventListener('click', togglePureMode);
+    $('#pure-mode-exit-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      exitPureMode();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && state.pureModeActive) exitPureMode();
+    });
+    // The browser may exit fullscreen on its own (native Esc handling, F11,
+    // the "exit fullscreen" bar) before our keydown handler ever fires --
+    // this keeps Pure Mode in sync with whatever actually happened.
+    document.addEventListener('fullscreenchange', () => {
+      if (!document.fullscreenElement && state.pureModeActive) exitPureMode();
+    });
+
+    const layer = $('#pure-mode-layer');
+    layer.addEventListener('dblclick', () => exitPureMode());
+    let lastTapAt = 0;
+    layer.addEventListener('touchend', () => {
+      const now = Date.now();
+      if (now - lastTapAt < 350) exitPureMode();
+      lastTapAt = now;
+    });
+  }
+
+  /* ---------------------------------------------------------
      Flight controls wiring
   --------------------------------------------------------- */
   function initFlightControls() {
@@ -1546,6 +1875,7 @@
     updateStatsSummary();
 
     state.occupiedSeats = generateOccupiedSeats();
+    initDepartureSelect();
     initDurationRuler();
     renderRouteCarousel();
     updateExploreSummary();
@@ -1558,6 +1888,8 @@
     initIFE();
     initFlightControls();
     initMapStyleToggle();
+    initPureMode();
+    primeSpeechVoices();
 
     refreshIcons();
   }

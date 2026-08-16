@@ -72,6 +72,11 @@ body { background: var(--bg-deep); }
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Heading (bearing) is the only thing eased here -- position itself stays
+     on Leaflet's direct/instant transform update (no transition), so the
+     plane never feels like it's dragging or overshooting its ground track,
+     only turning smoothly. */
+  transition: transform 0.5s linear;
 }
 .plane-marker-svg {
   width: 26px; height: 26px;
@@ -262,6 +267,33 @@ body { background: var(--bg-deep); }
   text-transform: uppercase;
   color: rgba(226,225,240,0.55);
 }
+
+/* Departure picker */
+.departure-select-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 5px 12px;
+  border-radius: 8px;
+  background: var(--bg-deep);
+  border: 1px solid rgba(255,255,255,0.14);
+}
+.departure-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  max-width: 44vw;
+}
+.departure-select option { background: var(--surface); color: #fff; }
+
 /* Duration ruler */
 .duration-ruler-wrap {
   margin-bottom: 16px;
@@ -860,6 +892,159 @@ body { background: var(--bg-deep); }
 }
 .hud-route-code { font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: 13px; color: #fff; }
 
+/* =========================================================
+   Pure Mode (distraction-free overlay)
+   ========================================================= */
+.pure-mode-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 150; /* above the HUD/top-bar, below nothing -- this IS the top layer */
+  background: #0a0a0a;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.pure-mode-hint {
+  position: absolute;
+  top: max(18px, env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: rgba(226,225,240,0.4);
+  text-align: center;
+  white-space: nowrap;
+}
+.pure-mode-center {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+}
+.pure-mode-timer {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 800;
+  font-size: clamp(3rem, 12vw, 6rem);
+  color: #fff;
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+.pure-mode-timer.is-paused { color: rgba(255,255,255,0.4); }
+.pure-mode-progress-track {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.12);
+  overflow: visible;
+}
+.pure-mode-progress-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: var(--neon);
+  transition: width 1s linear;
+}
+.pure-mode-plane-icon {
+  position: absolute;
+  top: 50%; left: 0%;
+  width: 26px; height: 26px;
+  transform: translate(-50%, -50%) rotate(90deg);
+  border-radius: 50%;
+  background: var(--neon);
+  color: #04120c;
+  display: flex; align-items: center; justify-content: center;
+  transition: left 1s linear;
+}
+.pure-mode-pct {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: clamp(0.9rem, 2.5vw, 1.1rem);
+  color: rgba(226,225,240,0.6);
+}
+.pure-mode-pct span { color: var(--neon); font-weight: 800; }
+.pure-mode-exit-btn {
+  position: absolute;
+  right: max(20px, env(safe-area-inset-right, 0px));
+  bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  min-width: 44px;
+  min-height: 44px;
+  padding: 10px 20px;
+  border-radius: 10px;
+  background: var(--bg-deep);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: rgba(226,225,240,0.8);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color .15s ease, color .15s ease;
+}
+.pure-mode-exit-btn:hover { border-color: var(--neon); color: #fff; }
+
+body.pure-mode-active #top-bar,
+body.pure-mode-active #flight-hud .hud-topright,
+body.pure-mode-active #flight-hud .hud-bottomleft,
+body.pure-mode-active #flight-hud .hud-controls,
+body.pure-mode-active #flight-hud .hud-topleft,
+body.pure-mode-active #map {
+  visibility: hidden;
+}
+
+/* =========================================================
+   Responsive (tablet, then phone -- narrower breakpoints are
+   declared later so they win the cascade on the smallest screens)
+   ========================================================= */
+@media (max-width: 1024px) {
+  .topbar-stats { gap: 10px; padding: 6px 12px; }
+  .topbar-stat { font-size: 11px; }
+  .route-chip { width: 160px; padding: 11px 13px; }
+  .explore-panel-inner { padding: 14px 14px 12px; }
+  .hud-topright { min-width: 170px; padding: 12px 16px; }
+  .hud-bottomleft { width: 220px; padding: 14px 18px; }
+  .control-btn { padding: 11px 18px; font-size: 13px; }
+  .pure-mode-center { max-width: 420px; gap: 18px; }
+}
+
+@media (max-width: 768px) {
+  .top-bar { padding: 10px 12px; gap: 8px; }
+  .icon-pill { width: 34px; height: 34px; }
+  .topbar-stats { gap: 8px; padding: 5px 10px; border-radius: 8px; }
+  .topbar-stat { font-size: 10px; gap: 4px; }
+  .explore-title { font-size: 10px; }
+  .departure-select { max-width: 34vw; font-size: 10.5px; }
+  .duration-ruler-readout { font-size: 12px; }
+  .route-carousel { gap: 8px; }
+  .route-chip { width: 148px; padding: 10px 12px; }
+  .rc-airport-badge { font-size: 11px; padding: 3px 6px; }
+  .route-chip-cities { font-size: 10px; }
+  .ecs-codes { font-size: 15px; }
+  .explore-cta-row { gap: 10px; }
+  .start-btn { padding: 12px 20px; font-size: 13px; }
+
+  .hud-topright { top: 66px; right: 10px; padding: 10px 14px; min-width: 0; }
+  .hud-readout-value { font-size: clamp(1.25rem, 6vw, 1.6rem); }
+  .hud-bottomleft { left: 10px; bottom: 150px; width: 168px; padding: 12px 14px; }
+  .hud-timer { font-size: clamp(1.8rem, 9vw, 2.3rem); margin-bottom: 8px; }
+  .hud-controls { bottom: 108px; gap: 8px; }
+  .control-btn { padding: 10px 14px; font-size: 12.5px; gap: 6px; }
+  .control-btn span { white-space: nowrap; }
+  .hud-topleft { top: 66px; left: 10px; padding: 7px 12px; }
+
+  .pure-mode-timer { font-size: clamp(2.4rem, 16vw, 4rem); }
+  .pure-mode-center { gap: 16px; padding: 0 8px; }
+  .pure-mode-hint { font-size: 9.5px; white-space: normal; padding: 0 12px; }
+  .pure-mode-exit-btn { right: 16px; bottom: 16px; padding: 11px 18px; font-size: 12.5px; }
+
+  /* Every tap target in Pure Mode -- the one place a user is deliberately
+     avoiding precision interaction -- gets an explicit >=44px hit area. */
+  #pure-mode-toggle-btn { min-width: 44px; min-height: 44px; }
+}
+
 @media (max-width: 640px) {
   .hud-bottomleft { width: 180px; padding: 12px 14px; bottom: 168px; left: 12px; }
   .hud-topright { right: 12px; padding: 10px 14px; }
@@ -1091,3 +1276,31 @@ body { background: var(--bg-deep); }
   text-align: center;
   font-family: 'JetBrains Mono', monospace;
 }
+
+/* =========================================================
+   Toast (tile-fallback notice)
+   ========================================================= */
+.app-toast {
+  position: fixed;
+  left: 50%;
+  bottom: max(24px, env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%) translateY(12px);
+  z-index: 190;
+  padding: 10px 18px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid rgba(255,255,255,0.16);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: center;
+  max-width: min(90vw, 420px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s ease, transform .2s ease;
+}
+.app-toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+

@@ -102,8 +102,13 @@
 <!-- ===================== EXPLORE PHASE (bottom carousel) ===================== -->
 <section id="explore-panel" class="hud-layer explore-panel">
   <div class="explore-panel-inner">
-    <div class="flex items-center justify-between mb-3">
+    <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
       <h2 class="explore-title"><i data-lucide="route" class="w-3.5 h-3.5"></i> Choose Your Route</h2>
+      <div class="departure-select-wrap" title="Select Departure">
+        <i data-lucide="plane-takeoff" class="w-3.5 h-3.5 text-cyan"></i>
+        <label for="departure-select" class="sr-only">Select Departure</label>
+        <select id="departure-select" class="departure-select"><!-- options injected --></select>
+      </div>
     </div>
 
     <div class="duration-ruler-wrap">
@@ -174,6 +179,9 @@
 
   <!-- bottom-center: controls -->
   <div class="hud-layer hud-controls">
+    <button id="pure-mode-toggle-btn" class="icon-pill" title="Full Screen / Pure Mode">
+      <i data-lucide="maximize" class="w-4 h-4"></i>
+    </button>
     <button id="pause-btn" class="control-btn control-btn-primary">
       <i data-lucide="pause" class="w-5 h-5" id="pause-icon"></i>
       <i data-lucide="play" class="w-5 h-5 hidden" id="play-icon"></i>
@@ -191,6 +199,22 @@
     <i data-lucide="plane" class="w-3.5 h-3.5 text-cyan"></i>
     <span class="hud-route-code" id="hud-dest-code">OKA</span>
   </div>
+</div>
+
+<!-- ===================== PURE MODE (distraction-free overlay) ===================== -->
+<div id="pure-mode-layer" class="pure-mode-layer hidden">
+  <div class="pure-mode-hint">Double-tap to exit pure mode · Esc to exit</div>
+  <div class="pure-mode-center">
+    <div class="pure-mode-timer" id="pure-mode-timer">00:00</div>
+    <div class="pure-mode-progress-track">
+      <div class="pure-mode-progress-fill" id="pure-mode-progress-fill"></div>
+      <div class="pure-mode-plane-icon" id="pure-mode-plane-icon">
+        <i data-lucide="plane" class="w-4 h-4 rotate-90"></i>
+      </div>
+    </div>
+    <div class="pure-mode-pct"><span id="pure-mode-pct">0</span>%</div>
+  </div>
+  <button id="pure-mode-exit-btn" class="pure-mode-exit-btn" type="button">Exit Pure</button>
 </div>
 
 <!-- ===================== TEMPLATES ===================== -->
