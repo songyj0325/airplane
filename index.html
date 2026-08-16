@@ -33,10 +33,6 @@
           sans: ['"Plus Jakarta Sans"', 'sans-serif'],
           mono: ['"JetBrains Mono"', 'monospace'],
         },
-        boxShadow: {
-          neon: '0 0 20px rgba(16,185,129,0.45), 0 0 60px rgba(16,185,129,0.15)',
-          cyan: '0 0 20px rgba(5,150,105,0.45), 0 0 60px rgba(5,150,105,0.12)',
-        }
       }
     }
   }
@@ -48,8 +44,6 @@
 
 <!-- ===================== MAP LAYER ===================== -->
 <div id="map"></div>
-<div class="map-vignette-top"></div>
-<div class="map-vignette-bottom"></div>
 
 <!-- Fixed center plane marker (explore/boarding/flight phases) -->
 <div id="fixed-plane" class="fixed-plane hidden">
@@ -60,7 +54,7 @@
 <!-- ===================== TOP BAR ===================== -->
 <header id="top-bar" class="hud-layer top-bar">
   <div class="flex items-center gap-2.5">
-    <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-neon to-emerald-900 flex items-center justify-center shadow-neon shrink-0">
+    <div class="w-10 h-10 rounded-xl bg-neon flex items-center justify-center shrink-0">
       <i data-lucide="plane" class="w-5 h-5 text-white -rotate-45"></i>
     </div>
     <div class="leading-none hidden xs:block">

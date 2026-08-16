@@ -198,6 +198,14 @@
 
     routeLayerGroup = L.layerGroup().addTo(map);
 
+    // Force a size recalculation once the container has its final layout —
+    // without this the map can initialize against a stale/zero size and
+    // render only partially until the user manually resizes the window.
+    map.whenReady(() => {
+      requestAnimationFrame(() => map.invalidateSize());
+      setTimeout(() => map.invalidateSize(), 300);
+    });
+
     window.addEventListener('resize', () => map.invalidateSize());
   }
 
