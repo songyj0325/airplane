@@ -1164,14 +1164,14 @@
     $('#pure-mode-plane-icon').style.left = `${progress * 100}%`;
     $('#pure-mode-pct').textContent = pct;
 
-    // Window View's overlay panel mirrors the same values, same reasoning.
-    $('#window-view-timer').textContent = fmtTimer(state.timer.remainingSeconds);
-    $('#window-view-progress-fill').style.width = `${progress * 100}%`;
-    $('#window-view-pct').textContent = pct;
-
     const remainingKm = Math.max(0, route.km * (1 - progress));
     $('#hud-distance').textContent = fmtKm(toDisplayDistance(remainingKm));
     $('#hud-unit-label').textContent = unit;
+
+    // Window View shows just remaining time + remaining distance, no
+    // progress bar -- the window itself is meant to stay unobstructed.
+    $('#window-view-timer').textContent = fmtTimer(state.timer.remainingSeconds);
+    $('#window-view-distance').textContent = fmtKm(toDisplayDistance(remainingKm));
 
     const baseSpeedKmh = route.km / (route.minutes / 60);
     const jitter = 1 + Math.sin(elapsed / 23) * 0.035;
@@ -1196,6 +1196,10 @@
     $('#pause-btn-label').textContent = state.timer.paused ? 'Resume' : 'Pause';
     $('#pause-icon').classList.toggle('hidden', state.timer.paused);
     $('#play-icon').classList.toggle('hidden', !state.timer.paused);
+    // Window View has its own compact pause/play icon toggle, kept in sync
+    // with the same state.timer.paused flag.
+    $('#window-view-pause-icon').classList.toggle('hidden', state.timer.paused);
+    $('#window-view-play-icon').classList.toggle('hidden', !state.timer.paused);
     updateHudText();
   }
 
@@ -1676,6 +1680,7 @@
       audioEl.pause();
       state.audio.activeKind = null;
       topIcon.dataset.active = 'false';
+      $('#window-view-sound-btn').dataset.active = 'false';
       $$('.sound-option').forEach((b) => b.classList.remove('active'));
       return;
     }
@@ -1687,6 +1692,7 @@
     try { await audioEl.play(); } catch (e) { /* blocked until a user gesture resolves it — button click already provides one */ }
     state.audio.activeKind = kind;
     topIcon.dataset.active = 'true';
+    $('#window-view-sound-btn').dataset.active = 'true';
   }
 
   function stopAmbient() {
@@ -1694,6 +1700,7 @@
     audioEl.pause();
     state.audio.activeKind = null;
     $('#noise-toggle').dataset.active = 'false';
+    $('#window-view-sound-btn').dataset.active = 'false';
     $$('.sound-option').forEach((b) => b.classList.remove('active'));
   }
 
@@ -1881,6 +1888,10 @@
     $('#window-view-layer').classList.remove('hidden');
     document.body.classList.add('window-view-active');
     setWindowViewTime(state.windowViewTime);
+    // The compact pause icon reflects whatever the timer's paused state
+    // already was -- entering Window View doesn't itself change it.
+    $('#window-view-pause-icon').classList.toggle('hidden', state.timer.paused);
+    $('#window-view-play-icon').classList.toggle('hidden', !state.timer.paused);
     updateHudText();
   }
 
@@ -1898,10 +1909,17 @@
 
   function initWindowView() {
     $('#window-view-toggle-btn').addEventListener('click', toggleWindowView);
-    $('#window-view-exit-btn').addEventListener('click', (e) => {
+    $('#window-view-close-btn').addEventListener('click', (e) => {
       e.stopPropagation();
       exitWindowView();
     });
+    $('#window-view-pause-btn').addEventListener('click', togglePause);
+    $('#window-view-sound-btn').addEventListener('click', () => {
+      if (state.audio.activeKind) stopAmbient(); else playAmbient('airplane');
+    });
+    // "Mode switch" -- hop directly into Pure Mode without dropping back to
+    // the map first; enterPureMode() already exits Window View for us.
+    $('#window-view-mode-btn').addEventListener('click', enterPureMode);
     $$('.window-view-time-btn').forEach((btn) => {
       btn.addEventListener('click', () => setWindowViewTime(btn.dataset.time));
     });

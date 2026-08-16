@@ -222,30 +222,59 @@
 
 <!-- ===================== WINDOW VIEW (looping video window + timer) ===================== -->
 <div id="window-view-layer" class="window-view-layer hidden">
-  <div class="window-view-time-picker">
-    <button class="window-view-time-btn active" data-time="morning" type="button">Morning</button>
-    <button class="window-view-time-btn" data-time="daytime" type="button">Daytime</button>
-    <button class="window-view-time-btn" data-time="night" type="button">Night</button>
+  <div class="window-view-controls window-view-controls-left">
+    <button id="window-view-pause-btn" class="window-view-icon-btn" type="button" title="Pause">
+      <i data-lucide="pause" class="w-4 h-4" id="window-view-pause-icon"></i>
+      <i data-lucide="play" class="w-4 h-4 hidden" id="window-view-play-icon"></i>
+    </button>
+    <button id="window-view-sound-btn" class="window-view-icon-btn" type="button" title="Cabin Sound" data-active="false">
+      <i data-lucide="volume-2" class="w-4 h-4"></i>
+    </button>
+  </div>
+  <div class="window-view-controls window-view-controls-right">
+    <button id="window-view-mode-btn" class="window-view-icon-btn" type="button" title="Switch to Pure Mode">
+      <i data-lucide="maximize" class="w-4 h-4"></i>
+    </button>
+    <button id="window-view-close-btn" class="window-view-icon-btn" type="button" title="Exit Window View">
+      <i data-lucide="x" class="w-4 h-4"></i>
+    </button>
   </div>
 
-  <div class="window-frame">
-    <video class="window-view-video" data-time="morning" autoplay loop muted playsinline
-      src="https://assets.mixkit.co/videos/4368/4368-720.mp4"></video>
-    <video class="window-view-video hidden" data-time="daytime" autoplay loop muted playsinline
-      src="https://assets.mixkit.co/videos/3099/3099-720.mp4"></video>
-    <video class="window-view-video hidden" data-time="night" autoplay loop muted playsinline
-      src="https://assets.mixkit.co/videos/3361/3361-720.mp4"></video>
+  <div class="window-view-stage">
+    <div class="window-view-time-picker">
+      <button class="window-view-time-btn active" data-time="morning" type="button">Morning</button>
+      <button class="window-view-time-btn" data-time="daytime" type="button">Daytime</button>
+      <button class="window-view-time-btn" data-time="night" type="button">Night</button>
+    </div>
 
-    <div class="window-overlay-panel">
-      <div class="window-overlay-timer" id="window-view-timer">00:00</div>
-      <div class="window-overlay-progress-track">
-        <div class="window-overlay-progress-fill" id="window-view-progress-fill"></div>
+    <div class="window-frame">
+      <div class="window-frame-rim">
+        <div class="window-frame-rivet tl"></div>
+        <div class="window-frame-rivet tr"></div>
+        <div class="window-frame-rivet bl"></div>
+        <div class="window-frame-rivet br"></div>
+        <div class="window-frame-glass">
+          <video class="window-view-video" data-time="morning" autoplay loop muted playsinline
+            src="https://assets.mixkit.co/videos/4368/4368-720.mp4"></video>
+          <video class="window-view-video hidden" data-time="daytime" autoplay loop muted playsinline
+            src="https://assets.mixkit.co/videos/4204/4204-720.mp4"></video>
+          <video class="window-view-video hidden" data-time="night" autoplay loop muted playsinline
+            src="https://assets.mixkit.co/videos/3361/3361-720.mp4"></video>
+        </div>
       </div>
-      <div class="window-overlay-pct"><span id="window-view-pct">0</span>% complete</div>
     </div>
   </div>
 
-  <button id="window-view-exit-btn" class="window-view-exit-btn" type="button">Exit Window View</button>
+  <div class="window-view-bottom-info">
+    <div class="window-view-info-block window-view-info-left">
+      <span class="window-view-info-label">Remaining Time</span>
+      <span class="window-view-info-value" id="window-view-timer">00:00</span>
+    </div>
+    <div class="window-view-info-block window-view-info-right">
+      <span class="window-view-info-label">Remaining Distance</span>
+      <span class="window-view-info-value"><span id="window-view-distance">0</span><span class="window-view-info-unit">km</span></span>
+    </div>
+  </div>
 </div>
 
 <!-- ===================== TEMPLATES ===================== -->
