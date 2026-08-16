@@ -8,15 +8,67 @@
   /* ---------------------------------------------------------
      Data
   --------------------------------------------------------- */
-  const ROUTES = [
-    { origin: 'ICN', dest: 'HND', originCity: 'Seoul',  destCity: 'Tokyo',    minutes: 135, km: 1200,  o: [37.4602, 126.4407], d: [35.5494, 139.7798] },
-    { origin: 'PUS', dest: 'OKA', originCity: 'Busan',  destCity: 'Okinawa',  minutes: 91,  km: 1004,  o: [35.1795, 128.9382], d: [26.1958, 127.6458] },
-    { origin: 'ICN', dest: 'CJU', originCity: 'Seoul',  destCity: 'Jeju',     minutes: 65,  km: 450,   o: [37.4602, 126.4407], d: [33.5113, 126.4930] },
-    { origin: 'ICN', dest: 'CDG', originCity: 'Seoul',  destCity: 'Paris',    minutes: 750, km: 8900,  o: [37.4602, 126.4407], d: [49.0097, 2.5479] },
-    { origin: 'ICN', dest: 'JFK', originCity: 'Seoul',  destCity: 'New York', minutes: 840, km: 11000, o: [37.4602, 126.4407], d: [40.6413, -73.7781] },
-    { origin: 'ICN', dest: 'LHR', originCity: 'Seoul',  destCity: 'London',   minutes: 790, km: 8850,  o: [37.4602, 126.4407], d: [51.4700, -0.4543] },
+  const ICN = [37.4602, 126.4407];
+  const PUS = [35.1795, 128.9382];
+
+  function haversineKm(o, d) {
+    const R = 6371;
+    const dLat = ((d[0] - o[0]) * Math.PI) / 180;
+    const dLng = ((d[1] - o[1]) * Math.PI) / 180;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos((o[0] * Math.PI) / 180) * Math.cos((d[0] * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  const RAW_ROUTES = [
+    // Asia
+    { origin: 'ICN', dest: 'HND', originCity: 'Seoul', destCity: 'Tokyo',        o: ICN, d: [35.5494, 139.7798] },
+    { origin: 'PUS', dest: 'OKA', originCity: 'Busan', destCity: 'Okinawa',      o: PUS, d: [26.1958, 127.6458] },
+    { origin: 'ICN', dest: 'CJU', originCity: 'Seoul', destCity: 'Jeju',         o: ICN, d: [33.5113, 126.4930] },
+    { origin: 'ICN', dest: 'KIX', originCity: 'Seoul', destCity: 'Osaka',        o: ICN, d: [34.4347, 135.2441] },
+    { origin: 'ICN', dest: 'TPE', originCity: 'Seoul', destCity: 'Taipei',       o: ICN, d: [25.0797, 121.2342] },
+    { origin: 'ICN', dest: 'HKG', originCity: 'Seoul', destCity: 'Hong Kong',    o: ICN, d: [22.3080, 113.9185] },
+    { origin: 'ICN', dest: 'PEK', originCity: 'Seoul', destCity: 'Beijing',      o: ICN, d: [40.0799, 116.6031] },
+    { origin: 'ICN', dest: 'PVG', originCity: 'Seoul', destCity: 'Shanghai',     o: ICN, d: [31.1443, 121.8083] },
+    { origin: 'ICN', dest: 'MNL', originCity: 'Seoul', destCity: 'Manila',       o: ICN, d: [14.5086, 121.0194] },
+    { origin: 'ICN', dest: 'BKK', originCity: 'Seoul', destCity: 'Bangkok',      o: ICN, d: [13.6900, 100.7501] },
+    { origin: 'ICN', dest: 'SIN', originCity: 'Seoul', destCity: 'Singapore',    o: ICN, d: [1.3644, 103.9915] },
+    { origin: 'ICN', dest: 'KUL', originCity: 'Seoul', destCity: 'Kuala Lumpur', o: ICN, d: [2.7456, 101.7099] },
+    { origin: 'ICN', dest: 'CGK', originCity: 'Seoul', destCity: 'Jakarta',      o: ICN, d: [-6.1256, 106.6559] },
+    { origin: 'ICN', dest: 'DEL', originCity: 'Seoul', destCity: 'Delhi',        o: ICN, d: [28.5562, 77.1000] },
+    { origin: 'ICN', dest: 'BOM', originCity: 'Seoul', destCity: 'Mumbai',       o: ICN, d: [19.0887, 72.8679] },
+    // Middle East
+    { origin: 'ICN', dest: 'DXB', originCity: 'Seoul', destCity: 'Dubai',       o: ICN, d: [25.2532, 55.3657] },
+    { origin: 'ICN', dest: 'DOH', originCity: 'Seoul', destCity: 'Doha',        o: ICN, d: [25.2731, 51.6080] },
+    { origin: 'ICN', dest: 'IST', originCity: 'Seoul', destCity: 'Istanbul',    o: ICN, d: [41.2753, 28.7519] },
+    // Europe
+    { origin: 'ICN', dest: 'CDG', originCity: 'Seoul', destCity: 'Paris',      o: ICN, d: [49.0097, 2.5479] },
+    { origin: 'ICN', dest: 'LHR', originCity: 'Seoul', destCity: 'London',     o: ICN, d: [51.4700, -0.4543] },
+    { origin: 'ICN', dest: 'FRA', originCity: 'Seoul', destCity: 'Frankfurt',  o: ICN, d: [50.0379, 8.5622] },
+    { origin: 'ICN', dest: 'AMS', originCity: 'Seoul', destCity: 'Amsterdam',  o: ICN, d: [52.3105, 4.7683] },
+    { origin: 'ICN', dest: 'FCO', originCity: 'Seoul', destCity: 'Rome',       o: ICN, d: [41.8003, 12.2389] },
+    { origin: 'ICN', dest: 'MAD', originCity: 'Seoul', destCity: 'Madrid',     o: ICN, d: [40.4983, -3.5676] },
+    // Americas
+    { origin: 'ICN', dest: 'JFK', originCity: 'Seoul', destCity: 'New York',     o: ICN, d: [40.6413, -73.7781] },
+    { origin: 'ICN', dest: 'LAX', originCity: 'Seoul', destCity: 'Los Angeles',  o: ICN, d: [33.9416, -118.4085] },
+    { origin: 'ICN', dest: 'ORD', originCity: 'Seoul', destCity: 'Chicago',      o: ICN, d: [41.9742, -87.9073] },
+    { origin: 'ICN', dest: 'YVR', originCity: 'Seoul', destCity: 'Vancouver',    o: ICN, d: [49.1967, -123.1815] },
+    { origin: 'ICN', dest: 'GRU', originCity: 'Seoul', destCity: 'Sao Paulo',    o: ICN, d: [-23.4356, -46.4731] },
+    // Oceania
+    { origin: 'ICN', dest: 'SYD', originCity: 'Seoul', destCity: 'Sydney',   o: ICN, d: [-33.9399, 151.1753] },
+    { origin: 'ICN', dest: 'AKL', originCity: 'Seoul', destCity: 'Auckland', o: ICN, d: [-36.9986, 174.7920] },
+    // Africa
+    { origin: 'ICN', dest: 'JNB', originCity: 'Seoul', destCity: 'Johannesburg', o: ICN, d: [-26.1392, 28.2460] },
+    { origin: 'ICN', dest: 'CAI', originCity: 'Seoul', destCity: 'Cairo',        o: ICN, d: [30.1219, 31.4056] },
   ];
-  const CUSTOM_HUB = [37.4602, 126.4407]; // ICN, used as the anchor for custom flights
+
+  // km/minutes are derived from the coordinates themselves (great-circle
+  // distance at a realistic cruise speed + takeoff/landing overhead) so the
+  // whole dataset stays internally consistent as routes are added.
+  const ROUTES = RAW_ROUTES.map((r) => {
+    const km = Math.round(haversineKm(r.o, r.d));
+    const minutes = Math.round((km / 850) * 60 + 25);
+    return { ...r, km, minutes };
+  });
 
   const STORAGE_STATS = 'pomoflight.stats.v1';
   const STORAGE_HISTORY = 'pomoflight.history.v1';
@@ -62,21 +114,10 @@
     return [p0[0] + (p1[0] - p0[0]) * frac, p0[1] + (p1[1] - p0[1]) * frac];
   }
 
-  function destinationPoint(lat, lng, bearingDeg, distanceKm) {
-    const R = 6371;
-    const δ = distanceKm / R;
-    const θ = toRad(bearingDeg);
-    const φ1 = toRad(lat), λ1 = toRad(lng);
-    const φ2 = Math.asin(Math.sin(φ1) * Math.cos(δ) + Math.cos(φ1) * Math.sin(δ) * Math.cos(θ));
-    const λ2 = λ1 + Math.atan2(Math.sin(θ) * Math.sin(δ) * Math.cos(φ1), Math.cos(δ) - Math.sin(φ1) * Math.sin(φ2));
-    return [toDeg(φ2), ((toDeg(λ2) + 540) % 360) - 180];
-  }
-
   function computeFlightZoom(km) {
-    if (km < 600) return 8;
-    if (km < 1500) return 6;
-    if (km < 4000) return 5;
-    return 4;
+    if (km < 1000) return 9;
+    if (km < 4000) return 8;
+    return 7;
   }
 
   /* ---------------------------------------------------------
@@ -233,7 +274,7 @@
       minZoom: 2,
       maxZoom: 18,
       zoomControl: false,
-      attributionControl: true,
+      attributionControl: false,
       worldCopyJump: false,
     });
 
@@ -264,6 +305,26 @@
   function drawRoutePreview(route) {
     if (!map) return;
     routeLayerGroup.clearLayers();
+
+    // Reachability radius: how far a real (non-warped) flight could travel
+    // within the current focus session at realistic cruising speed.
+    const radiusKm = (state.focusMinutes / 60) * 850;
+    L.circle(route.o, {
+      radius: radiusKm * 1000,
+      color: '#10B981', weight: 1.5, opacity: 0.45,
+      dashArray: '4,8', fill: true, fillColor: '#10B981', fillOpacity: 0.03,
+      interactive: false,
+    }).addTo(routeLayerGroup);
+
+    // Recommended airports around the world (dim dots); the active route's
+    // own destination is drawn separately below as the highlighted marker.
+    const seenDest = new Set();
+    ROUTES.forEach((r) => {
+      if (seenDest.has(r.dest) || (r.dest === route.dest && r.origin === route.origin)) return;
+      seenDest.add(r.dest);
+      L.marker(r.d, { icon: geoIcon('world'), interactive: false }).addTo(routeLayerGroup);
+    });
+
     const path = buildFlightPath(route.o, route.d);
     state.currentArc = path;
 
@@ -359,9 +420,7 @@
   --------------------------------------------------------- */
   function buildRulerTickValues() {
     const values = [];
-    for (let m = 30; m <= 120; m += 10) values.push(m);   // 30m .. 2h, fine-grained
-    for (let m = 150; m <= 240; m += 30) values.push(m);  // 2h .. 4h
-    for (let m = 300; m <= 840; m += 60) values.push(m);  // 4h .. 14h
+    for (let m = 10; m <= 840; m += 10) values.push(m); // 10m .. 14h, uniform 10-minute steps
     return values;
   }
   const RULER_VALUES = buildRulerTickValues();
@@ -414,6 +473,7 @@
     state.focusMinutes = minutes;
     renderRouteCarousel();
     updateExploreSummary();
+    drawRoutePreview(state.selectedRoute); // refresh the reachability radius
   }
 
   function initDurationRuler() {
@@ -574,18 +634,29 @@
     wrap.innerHTML = '';
     wrap.appendChild(buildBoardingPassNode(state.selectedRoute, state.selectedSeat));
     refreshIcons();
+    $('#start-boarding-btn').disabled = false;
     $('#explore-panel').classList.add('hidden');
     $('#boarding-panel').classList.remove('hidden');
   }
 
+  const TICKET_TEAR_DURATION = 600;
+
   function beginBoardingDeparture() {
-    const panel = $('#boarding-panel');
-    panel.classList.add('leaving');
+    const checkinBtn = $('#start-boarding-btn');
+    const ticket = $('.boarding-pass');
+    if (checkinBtn.disabled) return;
+    checkinBtn.disabled = true;
+    if (ticket) ticket.classList.add('tearing');
+
     setTimeout(() => {
-      panel.classList.add('hidden');
-      panel.classList.remove('leaving');
-      runwayZoomSequence();
-    }, 300);
+      const panel = $('#boarding-panel');
+      panel.classList.add('leaving');
+      setTimeout(() => {
+        panel.classList.add('hidden');
+        panel.classList.remove('leaving');
+        runwayZoomSequence();
+      }, 300);
+    }, TICKET_TEAR_DURATION);
   }
 
   /* ---------------------------------------------------------
@@ -664,6 +735,8 @@
   function enterFlightPhase() {
     const route = state.selectedRoute;
     $('#flight-hud').classList.remove('hidden');
+    $('#topbar-brand').classList.add('topbar-fade-hidden');
+    $('#topbar-stats').classList.add('topbar-fade-hidden');
     $('#hud-origin-code').textContent = route.origin;
     $('#hud-dest-code').textContent = route.dest;
     $('#hud-speed-multiplier').querySelector('span').textContent = `${fmtSpeedMultiplier(route.minutes, state.focusMinutes)} speed`;
@@ -778,6 +851,8 @@
     stopAmbient();
 
     $('#flight-hud').classList.add('hidden');
+    $('#topbar-brand').classList.remove('topbar-fade-hidden');
+    $('#topbar-stats').classList.remove('topbar-fade-hidden');
     if (progressPolyline) progressPolyline.setLatLngs([]);
 
     if (map) {
@@ -797,35 +872,6 @@
   }
 
   /* ---------------------------------------------------------
-     Custom flight
-  --------------------------------------------------------- */
-  function initCustomFlightModal() {
-    const modal = $('#custom-flight-modal');
-    $('#custom-flight-btn').addEventListener('click', () => {
-      $('#custom-flight-form').reset();
-      openModal(modal);
-    });
-    $('#custom-modal-close').addEventListener('click', () => closeModal(modal));
-    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(modal); });
-
-    $('#custom-flight-form').addEventListener('submit', (e) => {
-      e.preventDefault();
-      const origin = $('#custom-origin').value.trim().toUpperCase().slice(0, 4) || 'CST';
-      const dest = $('#custom-dest').value.trim().toUpperCase().slice(0, 4) || 'DST';
-      const originCity = $('#custom-origin-city').value.trim() || 'Origin';
-      const destCity = $('#custom-dest-city').value.trim() || 'Destination';
-      const minutes = Math.max(1, Math.min(600, parseInt($('#custom-minutes').value, 10) || 25));
-      const km = Math.round(minutes * 7.4);
-      const bearingDeg = Math.random() * 360;
-      const destCoord = destinationPoint(CUSTOM_HUB[0], CUSTOM_HUB[1], bearingDeg, km);
-
-      const route = { origin, dest, originCity, destCity, minutes, km, o: CUSTOM_HUB, d: destCoord, custom: true };
-      selectRoute(route);
-      closeModal(modal);
-    });
-  }
-
-  /* ---------------------------------------------------------
      Flight history modal
   --------------------------------------------------------- */
   function renderHistory() {
@@ -840,18 +886,30 @@
     state.history.forEach((h) => {
       const item = document.createElement('div');
       item.className = 'history-item';
+      item.dataset.timestamp = String(h.timestamp);
       const purposeTag = FOCUS_TAGS.find((t) => t.id === h.purpose);
       item.innerHTML = `
         <div class="history-icon"><i data-lucide="plane" class="w-4 h-4 -rotate-45"></i></div>
-        <div>
+        <div class="history-info">
           <div class="history-route">${h.origin} → ${h.dest} ${h.seat ? `· ${h.seat}` : ''}</div>
-          <div class="history-meta">${h.dateLabel} · ${fmtMinutes(h.minutes)}${purposeTag ? ` · ${purposeTag.label}` : ''}</div>
+          <div class="history-meta">
+            <span>${h.dateLabel} · ${fmtMinutes(h.minutes)}</span>
+            ${purposeTag ? `<span class="history-purpose"><i data-lucide="${purposeTag.icon}"></i>${purposeTag.label}</span>` : ''}
+          </div>
         </div>
         <div class="history-km">+${fmtKm(h.km)} km</div>
+        <button class="history-delete-btn" type="button" title="삭제" aria-label="삭제"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
       `;
+      item.querySelector('.history-delete-btn').addEventListener('click', () => deleteHistoryEntry(h.timestamp));
       list.appendChild(item);
     });
     refreshIcons();
+  }
+
+  function deleteHistoryEntry(timestamp) {
+    state.history = state.history.filter((h) => h.timestamp !== timestamp);
+    persistHistory();
+    renderHistory();
   }
 
   function initHistoryModal() {
@@ -1224,7 +1282,6 @@
 
     initSeatModal();
     initFocusModal();
-    initCustomFlightModal();
     initHistoryModal();
     initAmbientSound();
     initIFE();

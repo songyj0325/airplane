@@ -46,7 +46,7 @@
 
 <!-- ===================== TOP BAR ===================== -->
 <header id="top-bar" class="hud-layer top-bar">
-  <div class="flex items-center gap-2.5">
+  <div id="topbar-brand" class="flex items-center gap-2.5">
     <div class="w-10 h-10 rounded-xl bg-neon flex items-center justify-center shrink-0">
       <i data-lucide="plane" class="w-5 h-5 text-white -rotate-45"></i>
     </div>
@@ -56,7 +56,7 @@
     </div>
   </div>
 
-  <div class="topbar-stats">
+  <div class="topbar-stats" id="topbar-stats">
     <span class="topbar-stat"><i data-lucide="timer" class="w-3.5 h-3.5 text-neon"></i><span id="stat-total-time">0h 0m</span></span>
     <span class="topbar-stat"><i data-lucide="gauge-circle" class="w-3.5 h-3.5 text-cyan"></i><span id="stat-mileage">0 km</span></span>
     <span class="topbar-stat"><i data-lucide="badge-check" class="w-3.5 h-3.5 text-amber-400"></i><span id="stat-flights">0</span></span>
@@ -104,9 +104,6 @@
   <div class="explore-panel-inner">
     <div class="flex items-center justify-between mb-3">
       <h2 class="explore-title"><i data-lucide="route" class="w-3.5 h-3.5"></i> Choose Your Route</h2>
-      <button id="custom-flight-btn" class="explore-custom-btn">
-        <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> Custom
-      </button>
     </div>
 
     <div class="duration-ruler-wrap">
@@ -338,44 +335,6 @@
         <span>Continue</span>
       </button>
     </div>
-  </div>
-</div>
-
-<!-- Custom Flight Modal -->
-<div id="custom-flight-modal" class="modal-overlay hidden">
-  <div class="modal-box">
-    <div class="modal-header">
-      <h3 class="modal-title"><i data-lucide="plane-takeoff" class="w-5 h-5 text-cyan"></i> Custom Flight</h3>
-      <button id="custom-modal-close" class="modal-close"><i data-lucide="x" class="w-5 h-5"></i></button>
-    </div>
-    <form id="custom-flight-form" class="modal-body">
-      <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label class="form-label">Origin Code</label>
-          <input id="custom-origin" maxlength="4" placeholder="ICN" class="form-input uppercase" required>
-        </div>
-        <div>
-          <label class="form-label">Destination Code</label>
-          <input id="custom-dest" maxlength="4" placeholder="XXX" class="form-input uppercase" required>
-        </div>
-      </div>
-      <div>
-        <label class="form-label">Origin City (optional)</label>
-        <input id="custom-origin-city" placeholder="Seoul" class="form-input">
-      </div>
-      <div>
-        <label class="form-label">Destination City (optional)</label>
-        <input id="custom-dest-city" placeholder="Somewhere" class="form-input">
-      </div>
-      <div>
-        <label class="form-label">Target Duration (minutes)</label>
-        <input id="custom-minutes" type="number" min="1" max="600" placeholder="25" class="form-input" required>
-      </div>
-      <button type="submit" class="w-full mt-2 start-btn justify-center">
-        <i data-lucide="check" class="w-5 h-5"></i>
-        <span>Create Flight</span>
-      </button>
-    </form>
   </div>
 </div>
 
