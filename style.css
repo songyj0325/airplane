@@ -1062,40 +1062,44 @@ body.pure-mode-active #map {
 .window-view-time-btn:hover { color: #fff; }
 .window-view-time-btn.active { background: var(--neon); color: #04120c; }
 
-/* A real airliner window is a rounded rectangle (a "squircle"), not an
-   ellipse -- fixed-px corner radii instead of a percentage give that
-   distinct shape. Three flat, non-gradient layers build the depth:
-   the rim (thick plastic bezel, lit top-left/shadowed bottom-right via
-   layered inset box-shadows), the glass (recessed, its own inner shadow),
-   and the rivets (small beveled dots at the corners). */
+/* A real airliner window reads as a softly rounded OVAL (portrait, only
+   slightly taller than wide) -- not a rectangle with rounded corners.
+   border-radius as a PERCENTAGE (rather than a fixed px value) resolves
+   independently against each box's own width/height, which is what
+   produces that genuine oval/stadium silhouette instead of a "squircle".
+   width is sized with a single min() (no separate max-height) so the
+   aspect-ratio is never fought by a second constraint -- that combination
+   was what caused the shape to look squashed/distorted at some sizes.
+   Two flat, non-gradient layers build the depth: the rim (thick plastic
+   bezel, lit top-left / shadowed bottom-right via layered inset
+   box-shadows) and the glass (recessed, with its own inner shadow). */
 .window-frame {
   position: relative;
-  width: min(76vw, 360px);
+  width: min(70vw, 300px, 56vh * 0.8);
   aspect-ratio: 4 / 5;
-  max-height: 54vh;
 }
 .window-frame-rim {
   position: relative;
   width: 100%;
   height: 100%;
-  padding: 15px;
-  border-radius: 34px;
+  padding: 16px;
+  border-radius: 48%;
   background: #1b1b1f;
   box-shadow:
-    inset 0 2px 0 rgba(255,255,255,0.07),
-    inset 0 -8px 18px rgba(0,0,0,0.6),
-    inset 7px 0 14px rgba(0,0,0,0.35),
-    inset -7px 0 14px rgba(0,0,0,0.35),
-    0 22px 48px rgba(0,0,0,0.55);
+    inset 0 3px 0 rgba(255,255,255,0.08),
+    inset 0 -12px 26px rgba(0,0,0,0.6),
+    inset 12px 0 20px rgba(0,0,0,0.32),
+    inset -12px 0 20px rgba(0,0,0,0.32),
+    0 26px 54px rgba(0,0,0,0.55);
 }
 .window-frame-glass {
   position: relative;
   width: 100%;
   height: 100%;
-  border-radius: 21px;
+  border-radius: 46%;
   overflow: hidden;
   background: #000;
-  box-shadow: inset 0 0 0 2px rgba(0,0,0,0.65), inset 0 12px 26px rgba(0,0,0,0.5);
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,0.65), inset 0 16px 32px rgba(0,0,0,0.5);
 }
 .window-view-video {
   position: absolute;
@@ -1104,18 +1108,6 @@ body.pure-mode-active #map {
   height: 100%;
   object-fit: cover;
 }
-.window-frame-rivet {
-  position: absolute;
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  background: #0e0e10;
-  box-shadow: inset 0 1px 1px rgba(255,255,255,0.18), 0 1px 2px rgba(0,0,0,0.6);
-  z-index: 1;
-}
-.window-frame-rivet.tl { top: 7px; left: 7px; }
-.window-frame-rivet.tr { top: 7px; right: 7px; }
-.window-frame-rivet.bl { bottom: 7px; left: 7px; }
-.window-frame-rivet.br { bottom: 7px; right: 7px; }
 
 /* Remaining time / distance, split to the bottom corners so the window
    itself stays completely unobstructed. */
