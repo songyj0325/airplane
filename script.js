@@ -89,7 +89,12 @@
     currentArc: null,
     stats: loadStats(),
     history: loadHistory(),
-    timer: { running: false, paused: false, totalSeconds: 0, remainingSeconds: 0, intervalId: null },
+    timer: {
+      running: false, paused: false, totalSeconds: 0, remainingSeconds: 0, intervalId: null,
+      startedAt: null,      // performance.now() when the flight began
+      pausedAccum: 0,       // total ms already spent paused
+      pauseStartedAt: null, // performance.now() when the current pause began
+    },
     audio: { ctx: null, noiseNodes: null, noiseOn: false, volume: 0.35 },
   };
   let ticketMeta = { flightNo: randomFlightNo() };
@@ -164,6 +169,39 @@
       iconSize: [16, 16],
       iconAnchor: [8, 8],
     });
+  }
+
+  // Real airplane silhouette (Google Material "flight" glyph, nose pointing up = bearing 0)
+  const PLANE_SVG_PATH = 'M21,16V14L13,9V3.5C13,2.67 12.33,2 11.5,2C10.67,2 10,2.67 10,3.5V9L2,14V16L10,13.5V19L7.5,20.5V22L11.5,21L15.5,22V20.5L13,19V13.5L21,16Z';
+
+  function planeDivIcon() {
+    return L.divIcon({
+      className: 'plane-marker',
+      html: `<div class="plane-marker-rotor"><svg viewBox="0 0 24 24" class="plane-marker-svg"><path d="${PLANE_SVG_PATH}"/></svg></div>`,
+      iconSize: [34, 34],
+      iconAnchor: [17, 17],
+    });
+  }
+
+  let planeMarker = null;
+
+  function createPlaneMarker(latlng, bearingDeg) {
+    if (!map) return;
+    removePlaneMarker();
+    planeMarker = L.marker(latlng, { icon: planeDivIcon(), zIndexOffset: 1000, interactive: false }).addTo(map);
+    setPlaneBearing(bearingDeg);
+  }
+
+  function setPlaneBearing(bearingDeg) {
+    if (!planeMarker) return;
+    const el = planeMarker.getElement();
+    const rotor = el && el.querySelector('.plane-marker-rotor');
+    if (rotor) rotor.style.transform = `rotate(${bearingDeg}deg)`;
+  }
+
+  function removePlaneMarker() {
+    if (planeMarker && map) map.removeLayer(planeMarker);
+    planeMarker = null;
   }
 
   function initMap() {
@@ -253,8 +291,8 @@
   }
 
   function generateOccupiedSeats() {
-    const cols = ['A', 'B', 'C', 'D', 'E', 'F'];
-    const rows = 15;
+    const cols = SEAT_COLS;
+    const rows = SEAT_ROWS;
     const occ = new Set();
     const occCount = Math.floor(rows * cols.length * 0.22);
     while (occ.size < occCount) {
@@ -387,7 +425,7 @@
   /* ---------------------------------------------------------
      Seat selection modal
   --------------------------------------------------------- */
-  const SEAT_COLS = ['A', 'B', 'C', 'D', 'E', 'F'];
+  const SEAT_COLS = ['A', 'C', 'D', 'F']; // single-aisle 2+2 layout: A,C | D,F
   const SEAT_ROWS = 15;
 
   function tierForRow(row) {
@@ -422,14 +460,14 @@
 
       const leftGroup = document.createElement('div');
       leftGroup.className = 'seat-group';
-      ['A', 'B', 'C'].forEach((col) => leftGroup.appendChild(buildSeatBtn(row, col)));
+      ['A', 'C'].forEach((col) => leftGroup.appendChild(buildSeatBtn(row, col)));
 
       const aisle = document.createElement('div');
       aisle.className = 'seat-aisle-gap';
 
       const rightGroup = document.createElement('div');
       rightGroup.className = 'seat-group';
-      ['D', 'E', 'F'].forEach((col) => rightGroup.appendChild(buildSeatBtn(row, col)));
+      ['D', 'F'].forEach((col) => rightGroup.appendChild(buildSeatBtn(row, col)));
 
       rowEl.appendChild(rowNum);
       rowEl.appendChild(leftGroup);
@@ -499,53 +537,118 @@
     setTimeout(() => {
       panel.classList.add('hidden');
       panel.classList.remove('leaving');
-      enterFlightPhase();
-    }, 420);
+      runwayZoomSequence();
+    }, 300);
+  }
+
+  /* ---------------------------------------------------------
+     Check-in cinematic: swoop into the departure runway,
+     then climb out to cruising altitude before tracking begins
+  --------------------------------------------------------- */
+  const RUNWAY_ZOOM = 16;
+  const RUNWAY_ZOOM_DURATION = 1.8;
+  const CLIMB_DURATION = 1.2;
+
+  function runwayZoomSequence() {
+    const route = state.selectedRoute;
+    if (!map) { enterFlightPhase(); return; }
+
+    map.dragging.disable();
+    map.scrollWheelZoom.disable();
+    map.doubleClickZoom.disable();
+    map.touchZoom.disable();
+    if (map.tap) map.tap.disable();
+
+    map.flyTo(route.o, RUNWAY_ZOOM, { duration: RUNWAY_ZOOM_DURATION });
+    setTimeout(() => {
+      const cruiseZoom = computeFlightZoom(route.km);
+      map.flyTo(route.o, cruiseZoom, { duration: CLIMB_DURATION });
+      setTimeout(enterFlightPhase, CLIMB_DURATION * 1000);
+    }, RUNWAY_ZOOM_DURATION * 1000);
   }
 
   /* ---------------------------------------------------------
      Flight phase (in-flight satellite tracking)
   --------------------------------------------------------- */
+  function getElapsedMs() {
+    if (state.timer.startedAt == null) return 0;
+    const now = performance.now();
+    const pausedNow = state.timer.paused && state.timer.pauseStartedAt != null ? now - state.timer.pauseStartedAt : 0;
+    return now - state.timer.startedAt - state.timer.pausedAccum - pausedNow;
+  }
+
+  function getProgress() {
+    const totalMs = state.timer.totalSeconds * 1000;
+    if (totalMs <= 0) return 0;
+    return Math.min(1, Math.max(0, getElapsedMs() / totalMs));
+  }
+
+  let flightAnimFrameId = null;
+
+  function startAnimationLoop() {
+    cancelAnimationFrame(flightAnimFrameId);
+    const frame = () => {
+      if (!state.timer.running || state.timer.paused) return;
+      updatePlanePosition(getProgress());
+      flightAnimFrameId = requestAnimationFrame(frame);
+    };
+    flightAnimFrameId = requestAnimationFrame(frame);
+  }
+
+  function stopAnimationLoop() {
+    cancelAnimationFrame(flightAnimFrameId);
+    flightAnimFrameId = null;
+  }
+
+  function updatePlanePosition(progress) {
+    const arc = state.currentArc;
+    if (!arc || !map || !planeMarker) return;
+    const pos = pointAtProgress(arc, progress);
+    const aheadPos = pointAtProgress(arc, Math.min(1, progress + 0.004));
+    const bearing = bearingBetween(pos, aheadPos);
+    planeMarker.setLatLng(pos);
+    setPlaneBearing(bearing);
+    map.setView(pos, map.getZoom(), { animate: false });
+
+    const idx = Math.floor(progress * (arc.length - 1));
+    progressPolyline.setLatLngs(arc.slice(0, idx + 1).concat([pos]));
+  }
+
   function enterFlightPhase() {
     const route = state.selectedRoute;
     $('#flight-hud').classList.remove('hidden');
-    $('#fixed-plane').classList.remove('hidden');
     $('#hud-origin-code').textContent = route.origin;
     $('#hud-dest-code').textContent = route.dest;
-
-    if (map) {
-      map.dragging.disable();
-      map.scrollWheelZoom.disable();
-      map.doubleClickZoom.disable();
-      map.touchZoom.disable();
-      if (map.tap) map.tap.disable();
-      map.setView(state.currentArc[0], computeFlightZoom(route.km), { animate: false });
-    }
 
     const totalSeconds = route.minutes * 60;
     state.timer.totalSeconds = totalSeconds;
     state.timer.remainingSeconds = totalSeconds;
     state.timer.running = true;
     state.timer.paused = false;
+    state.timer.startedAt = performance.now();
+    state.timer.pausedAccum = 0;
+    state.timer.pauseStartedAt = null;
 
-    updateHud();
+    const startPos = state.currentArc[0];
+    const initialBearing = bearingBetween(startPos, pointAtProgress(state.currentArc, 0.01));
+    createPlaneMarker(startPos, initialBearing);
+
+    updateHudText();
     clearInterval(state.timer.intervalId);
     state.timer.intervalId = setInterval(tickTimer, 1000);
+    startAnimationLoop();
   }
 
   function tickTimer() {
     if (state.timer.paused) return;
-    state.timer.remainingSeconds -= 1;
+    state.timer.remainingSeconds = Math.max(0, state.timer.totalSeconds - getElapsedMs() / 1000);
+    updateHudText();
     if (state.timer.remainingSeconds <= 0) {
-      state.timer.remainingSeconds = 0;
-      updateHud();
       completeFlight();
-      return;
     }
-    updateHud();
   }
 
-  function updateHud() {
+  function updateHudText() {
     const route = state.selectedRoute;
     const total = state.timer.totalSeconds || 1;
     const elapsed = total - state.timer.remainingSeconds;
@@ -562,35 +665,30 @@
     const baseSpeed = route.km / (route.minutes / 60);
     const jitter = 1 + Math.sin(elapsed / 23) * 0.035;
     $('#hud-speed').textContent = fmtKm(progress >= 1 ? 0 : baseSpeed * jitter);
-
-    const arc = state.currentArc;
-    if (!arc) return;
-    const pos = pointAtProgress(arc, progress);
-    const aheadPos = pointAtProgress(arc, Math.min(1, progress + 0.01));
-    const bearing = bearingBetween(pos, aheadPos);
-    $('.fixed-plane-icon').style.transform = `rotate(${bearing}deg)`;
-
-    if (!map) return;
-    const idx = Math.floor(progress * (arc.length - 1));
-    progressPolyline.setLatLngs(arc.slice(0, idx + 1).concat([pos]));
-
-    if (!state.timer.paused) {
-      map.panTo(pos, { animate: true, duration: 0.95, easeLinearity: 0.4, noMoveStart: true });
-    }
   }
 
   function togglePause() {
     if (!state.timer.running) return;
     state.timer.paused = !state.timer.paused;
+    if (state.timer.paused) {
+      state.timer.pauseStartedAt = performance.now();
+      stopAnimationLoop();
+    } else {
+      state.timer.pausedAccum += performance.now() - state.timer.pauseStartedAt;
+      state.timer.pauseStartedAt = null;
+      startAnimationLoop();
+    }
     $('#pause-btn-label').textContent = state.timer.paused ? 'Resume' : 'Pause';
     $('#pause-icon').classList.toggle('hidden', state.timer.paused);
     $('#play-icon').classList.toggle('hidden', !state.timer.paused);
-    updateHud();
+    updateHudText();
   }
 
   function completeFlight() {
     clearInterval(state.timer.intervalId);
     state.timer.running = false;
+    stopAnimationLoop();
+    updatePlanePosition(1);
 
     const route = state.selectedRoute;
     state.stats.totalSeconds += state.timer.totalSeconds;
@@ -623,6 +721,8 @@
     clearInterval(state.timer.intervalId);
     state.timer.running = false;
     state.timer.paused = false;
+    stopAnimationLoop();
+    removePlaneMarker();
     if (state.audio.noiseOn) {
       stopCabinNoise();
       $('#noise-power-btn').dataset.active = 'false';
@@ -631,7 +731,6 @@
     }
 
     $('#flight-hud').classList.add('hidden');
-    $('#fixed-plane').classList.add('hidden');
     if (progressPolyline) progressPolyline.setLatLngs([]);
 
     if (map) {

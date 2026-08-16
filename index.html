@@ -21,13 +21,12 @@
     theme: {
       extend: {
         colors: {
-          bgdeep: '#0F0C1B',
-          bgdeep2: '#1A102F',
-          ticket: '#0A1712',
-          ticket2: '#0F2419',
+          bgdeep: '#121212',
+          bgdeep2: '#1E1E1E',
+          ticket: '#1E1E1E',
+          ticket2: '#121212',
           neon: '#10B981',
           cyan: '#059669',
-          deepgreen: '#064E3B',
         },
         fontFamily: {
           sans: ['"Plus Jakarta Sans"', 'sans-serif'],
@@ -44,12 +43,6 @@
 
 <!-- ===================== MAP LAYER ===================== -->
 <div id="map"></div>
-
-<!-- Fixed center plane marker (explore/boarding/flight phases) -->
-<div id="fixed-plane" class="fixed-plane hidden">
-  <div class="fixed-plane-pulse"></div>
-  <div class="fixed-plane-icon"><i data-lucide="navigation" class="w-6 h-6"></i></div>
-</div>
 
 <!-- ===================== TOP BAR ===================== -->
 <header id="top-bar" class="hud-layer top-bar">
@@ -137,7 +130,7 @@
       </button>
       <button id="start-boarding-btn" class="start-btn">
         <i data-lucide="plane-takeoff" class="w-5 h-5"></i>
-        <span>비행 시작 (Boarding)</span>
+        <span>체크인</span>
       </button>
     </div>
   </div>
@@ -294,7 +287,13 @@
         <span class="seat-legend-item"><span class="seat-swatch seat-swatch-occupied"></span>Occupied</span>
       </div>
       <div class="cabin-plan">
-        <div class="cabin-nose"><i data-lucide="chevron-up" class="w-4 h-4"></i><span>FRONT</span></div>
+        <div class="cabin-nose">
+          <svg class="nose-cone-svg" viewBox="0 0 120 46" aria-hidden="true">
+            <path class="nose-outline" d="M60 2 C 30 2 10 22 6 44 L114 44 C 110 22 90 2 60 2 Z" />
+            <ellipse class="nose-window" cx="60" cy="21" rx="15" ry="9" />
+          </svg>
+          <span>FRONT</span>
+        </div>
         <div id="seat-grid" class="seat-grid"></div>
       </div>
       <div class="seat-confirm-row">
