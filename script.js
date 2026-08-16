@@ -30,24 +30,16 @@
   const toRad = (d) => (d * Math.PI) / 180;
   const toDeg = (r) => (r * 180) / Math.PI;
 
-  function buildArc(o, d, km, segments = 100) {
+  function buildFlightPath(o, d, segments = 100) {
     const lat1 = o[0], lng1 = o[1], lat2 = d[0];
     let dLng = d[1] - lng1;
     if (dLng > 180) dLng -= 360;
     if (dLng < -180) dLng += 360;
     const lng2u = lng1 + dLng;
-    const midLat = (lat1 + lat2) / 2;
-    const midLng = (lng1 + lng2u) / 2;
-    const bulge = Math.min(26, km / 480);
-    const cLat = midLat + bulge;
-    const cLng = midLng;
     const pts = [];
     for (let i = 0; i <= segments; i++) {
       const t = i / segments;
-      const mt = 1 - t;
-      const lat = mt * mt * lat1 + 2 * mt * t * cLat + t * t * lat2;
-      const lng = mt * mt * lng1 + 2 * mt * t * cLng + t * t * lng2u;
-      pts.push([lat, lng]);
+      pts.push([lat1 + (lat2 - lat1) * t, lng1 + (lng2u - lng1) * t]);
     }
     return pts;
   }
@@ -149,7 +141,6 @@
     return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
   }
   function randomFlightNo() { return `PF-${Math.floor(1000 + Math.random() * 9000)}`; }
-  function routeLabel(route) { return `${route.origin}-${route.dest}-${route.minutes}`; }
 
   /* ---------------------------------------------------------
      Header stats
@@ -176,6 +167,14 @@
   }
 
   function initMap() {
+    if (typeof L === 'undefined') {
+      console.error('Leaflet failed to load — map features are disabled.');
+      const banner = document.createElement('div');
+      banner.className = 'load-error-banner';
+      banner.textContent = '지도 라이브러리를 불러오지 못했습니다. 네트워크 연결을 확인해 주세요. (지도 기능 없이 계속됩니다)';
+      document.body.appendChild(banner);
+      return;
+    }
     map = L.map('map', {
       center: [20, 122],
       zoom: 3,
@@ -203,21 +202,23 @@
   }
 
   function drawRoutePreview(route) {
+    if (!map) return;
     routeLayerGroup.clearLayers();
-    const arc = buildArc(route.o, route.d, route.km);
-    state.currentArc = arc;
+    const path = buildFlightPath(route.o, route.d);
+    state.currentArc = path;
 
-    remainderPolyline = L.polyline(arc, { color: '#00F0FF', weight: 2.5, opacity: 0.55, dashArray: '2,10', lineCap: 'round' }).addTo(routeLayerGroup);
-    progressPolyline = L.polyline([], { color: '#FF2A85', weight: 3.5, opacity: 0.95, className: 'route-arc-glow', lineCap: 'round' }).addTo(routeLayerGroup);
+    remainderPolyline = L.polyline(path, { color: '#059669', weight: 2.5, opacity: 0.6, dashArray: '2,10', lineCap: 'round' }).addTo(routeLayerGroup);
+    progressPolyline = L.polyline([], { color: '#10B981', weight: 3.5, opacity: 0.95, className: 'route-arc-glow', lineCap: 'round' }).addTo(routeLayerGroup);
     originMarker = L.marker(route.o, { icon: geoIcon('origin') }).addTo(routeLayerGroup);
     destMarker = L.marker(route.d, { icon: geoIcon('dest') }).addTo(routeLayerGroup);
 
-    map.flyToBounds(L.latLngBounds(arc), { paddingTopLeft: [40, 110], paddingBottomRight: [40, 220], duration: 1.3 });
+    map.flyToBounds(L.latLngBounds(path), { paddingTopLeft: [40, 110], paddingBottomRight: [40, 220], duration: 1.3 });
   }
 
   function initMapStyleToggle() {
     const btn = $('#map-style-toggle');
     btn.addEventListener('click', () => {
+      if (!map) return;
       if (currentMapStyle === 'satellite') {
         map.removeLayer(satelliteLayer);
         darkLayer.addTo(map);
@@ -264,6 +265,7 @@
     renderRouteCarousel();
     updateExploreSummary();
     drawRoutePreview(route);
+    syncRulerToRoute(route);
   }
 
   function renderRouteCarousel() {
@@ -276,7 +278,6 @@
       node.querySelector('.rc-dest').textContent = route.dest;
       node.querySelector('.route-chip-cities').textContent = `${route.originCity} → ${route.destCity}`;
       node.querySelector('.rc-duration').textContent = fmtMinutes(route.minutes);
-      node.querySelector('.rc-distance').textContent = `${fmtKm(route.km)} km`;
       if (isSameRoute(route, state.selectedRoute)) node.classList.add('selected');
       node.addEventListener('click', () => selectRoute(route));
       carousel.appendChild(node);
@@ -289,6 +290,90 @@
     $('#ecs-codes').innerHTML = `${route.origin} <i data-lucide="plane" class="w-3.5 h-3.5 inline text-cyan"></i> ${route.dest}`;
     $('#ecs-meta').textContent = `${fmtMinutes(route.minutes)} · ${fmtKm(route.km)} km`;
     refreshIcons();
+  }
+
+  /* ---------------------------------------------------------
+     Duration ruler (horizontal scroll picker)
+  --------------------------------------------------------- */
+  const RULER_MIN = 10, RULER_MAX = 180, RULER_STEP = 10;
+
+  function renderDurationRuler() {
+    const track = $('#duration-ruler-track');
+    track.innerHTML = '';
+    for (let m = RULER_MIN; m <= RULER_MAX; m += RULER_STEP) {
+      const tick = document.createElement('div');
+      tick.className = 'ruler-tick';
+      tick.dataset.minutes = String(m);
+      const mark = document.createElement('span');
+      mark.className = 'ruler-tick-mark';
+      const label = document.createElement('span');
+      label.className = 'ruler-tick-label';
+      label.textContent = fmtMinutes(m);
+      tick.appendChild(mark);
+      tick.appendChild(label);
+      tick.addEventListener('click', () => {
+        tick.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      });
+      track.appendChild(tick);
+    }
+  }
+
+  function getNearestRulerTick() {
+    const ruler = $('#duration-ruler');
+    const rect = ruler.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    let closest = null;
+    let closestDist = Infinity;
+    $$('.ruler-tick').forEach((tick) => {
+      const tRect = tick.getBoundingClientRect();
+      const dist = Math.abs((tRect.left + tRect.width / 2) - centerX);
+      if (dist < closestDist) { closestDist = dist; closest = tick; }
+    });
+    return closest;
+  }
+
+  function highlightRulerTick(tickEl) {
+    if (!tickEl) return;
+    $$('.ruler-tick').forEach((t) => t.classList.toggle('active', t === tickEl));
+    $('#ruler-readout').textContent = fmtMinutes(parseInt(tickEl.dataset.minutes, 10));
+  }
+
+  function commitRulerSelection(tickEl) {
+    if (!tickEl) return;
+    const minutes = parseInt(tickEl.dataset.minutes, 10);
+    const currentRounded = Math.round(state.selectedRoute.minutes / RULER_STEP) * RULER_STEP;
+    if (minutes === currentRounded) return;
+    const km = Math.round(minutes * 7.4);
+    const bearingDeg = Math.random() * 360;
+    const destCoord = destinationPoint(CUSTOM_HUB[0], CUSTOM_HUB[1], bearingDeg, km);
+    const route = { origin: 'ICN', dest: 'FOCUS', originCity: 'Seoul', destCity: 'Custom Focus', minutes, km, o: CUSTOM_HUB, d: destCoord, custom: true };
+    selectRoute(route);
+  }
+
+  function syncRulerToRoute(route) {
+    const readout = $('#ruler-readout');
+    if (route.minutes < RULER_MIN || route.minutes > RULER_MAX) {
+      $$('.ruler-tick').forEach((t) => t.classList.remove('active'));
+      readout.textContent = fmtMinutes(route.minutes);
+      return;
+    }
+    const rounded = Math.min(RULER_MAX, Math.max(RULER_MIN, Math.round(route.minutes / RULER_STEP) * RULER_STEP));
+    const tick = $(`.ruler-tick[data-minutes="${rounded}"]`);
+    if (!tick) return;
+    highlightRulerTick(tick);
+    tick.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  }
+
+  function initDurationRuler() {
+    renderDurationRuler();
+    const ruler = $('#duration-ruler');
+    let commitTimer = null;
+    ruler.addEventListener('scroll', () => {
+      const nearest = getNearestRulerTick();
+      highlightRulerTick(nearest);
+      clearTimeout(commitTimer);
+      commitTimer = setTimeout(() => commitRulerSelection(nearest), 180);
+    }, { passive: true });
   }
 
   /* ---------------------------------------------------------
@@ -420,13 +505,14 @@
     $('#hud-origin-code').textContent = route.origin;
     $('#hud-dest-code').textContent = route.dest;
 
-    map.dragging.disable();
-    map.scrollWheelZoom.disable();
-    map.doubleClickZoom.disable();
-    map.touchZoom.disable();
-    if (map.tap) map.tap.disable();
-
-    map.setView(state.currentArc[0], computeFlightZoom(route.km), { animate: false });
+    if (map) {
+      map.dragging.disable();
+      map.scrollWheelZoom.disable();
+      map.doubleClickZoom.disable();
+      map.touchZoom.disable();
+      if (map.tap) map.tap.disable();
+      map.setView(state.currentArc[0], computeFlightZoom(route.km), { animate: false });
+    }
 
     const totalSeconds = route.minutes * 60;
     state.timer.totalSeconds = totalSeconds;
@@ -470,11 +556,13 @@
     $('#hud-speed').textContent = fmtKm(progress >= 1 ? 0 : baseSpeed * jitter);
 
     const arc = state.currentArc;
+    if (!arc) return;
     const pos = pointAtProgress(arc, progress);
     const aheadPos = pointAtProgress(arc, Math.min(1, progress + 0.01));
     const bearing = bearingBetween(pos, aheadPos);
     $('.fixed-plane-icon').style.transform = `rotate(${bearing}deg)`;
 
+    if (!map) return;
     const idx = Math.floor(progress * (arc.length - 1));
     progressPolyline.setLatLngs(arc.slice(0, idx + 1).concat([pos]));
 
@@ -538,16 +626,18 @@
     $('#fixed-plane').classList.add('hidden');
     if (progressPolyline) progressPolyline.setLatLngs([]);
 
-    map.dragging.enable();
-    map.scrollWheelZoom.enable();
-    map.doubleClickZoom.enable();
-    map.touchZoom.enable();
-    if (map.tap) map.tap.enable();
+    if (map) {
+      map.dragging.enable();
+      map.scrollWheelZoom.enable();
+      map.doubleClickZoom.enable();
+      map.touchZoom.enable();
+      if (map.tap) map.tap.enable();
+    }
 
     $('#explore-panel').classList.remove('hidden');
     $('#boarding-panel').classList.add('hidden');
 
-    if (state.currentArc) {
+    if (map && state.currentArc) {
       map.flyToBounds(L.latLngBounds(state.currentArc), { paddingTopLeft: [40, 110], paddingBottomRight: [40, 220], duration: 1.1 });
     }
   }
@@ -762,12 +852,60 @@
   }
 
   /* ---------------------------------------------------------
+     In-flight entertainment (YouTube)
+  --------------------------------------------------------- */
+  function extractYoutubeId(url) {
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([\w-]{11})/,
+    ];
+    for (const re of patterns) {
+      const m = url.match(re);
+      if (m) return m[1];
+    }
+    return null;
+  }
+
+  function initIFE() {
+    const modal = $('#ife-modal');
+    const input = $('#youtube-url-input');
+    const loadBtn = $('#youtube-load-btn');
+    const placeholder = $('#ife-screen-placeholder');
+    const mount = $('#ife-player-mount');
+
+    $('#ife-toggle-btn').addEventListener('click', () => openModal(modal));
+    $('#ife-modal-close').addEventListener('click', () => closeModal(modal));
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(modal); });
+
+    function loadVideo() {
+      const url = input.value.trim();
+      const id = extractYoutubeId(url);
+      if (!id) {
+        input.classList.add('shake');
+        setTimeout(() => input.classList.remove('shake'), 400);
+        return;
+      }
+      const iframe = document.createElement('iframe');
+      iframe.src = `https://www.youtube.com/embed/${id}?autoplay=1&rel=0`;
+      iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+      iframe.allowFullscreen = true;
+      mount.innerHTML = '';
+      mount.appendChild(iframe);
+      mount.classList.remove('hidden');
+      placeholder.classList.add('hidden');
+      $('#ife-toggle-btn').dataset.active = 'true';
+    }
+
+    loadBtn.addEventListener('click', loadVideo);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') loadVideo(); });
+  }
+
+  /* ---------------------------------------------------------
      Confetti
   --------------------------------------------------------- */
   function launchConfetti() {
     const container = $('#confetti-container');
     container.innerHTML = '';
-    const colors = ['#FF2A85', '#00F0FF', '#FFD700', '#ffffff', '#c4137a'];
+    const colors = ['#10B981', '#059669', '#6EE7B7', '#ffffff', '#34D399'];
     for (let i = 0; i < 50; i++) {
       const piece = document.createElement('div');
       piece.className = 'confetti-piece';
@@ -809,18 +947,25 @@
      Init
   --------------------------------------------------------- */
   function init() {
-    initMap();
+    try {
+      initMap();
+    } catch (e) {
+      console.error('Map init failed:', e);
+    }
     renderStats();
 
     state.occupiedSeats = generateOccupiedSeats();
+    initDurationRuler();
     renderRouteCarousel();
     updateExploreSummary();
     drawRoutePreview(state.selectedRoute);
+    syncRulerToRoute(state.selectedRoute);
 
     initSeatModal();
     initCustomFlightModal();
     initHistoryModal();
     initCabinAudio();
+    initIFE();
     initFlightControls();
     initMapStyleToggle();
 
