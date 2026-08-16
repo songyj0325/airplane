@@ -19,14 +19,26 @@
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
+  // Single source of truth for the flight-time model, shared by both the
+  // route dataset (km -> minutes) and the radar circle (minutes -> km) so
+  // the two are always mathematically exact inverses of each other.
+  const CRUISE_SPEED_KMH = 850;
+  const FLIGHT_OVERHEAD_MINUTES = 25; // fixed takeoff/climb/landing allowance
+  const minutesForDistance = (km) => Math.round((km / CRUISE_SPEED_KMH) * 60 + FLIGHT_OVERHEAD_MINUTES);
+  const reachableKmForMinutes = (minutes) => Math.max(0, minutes - FLIGHT_OVERHEAD_MINUTES) / 60 * CRUISE_SPEED_KMH;
+
   const RAW_ROUTES = [
-    // Asia
+    // Asia — Korea / Japan (short-haul, populate the small-radius end densely)
+    { origin: 'ICN', dest: 'GMP', originCity: 'Seoul', destCity: 'Gimpo',        o: ICN, d: [37.5583, 126.7906] },
     { origin: 'ICN', dest: 'HND', originCity: 'Seoul', destCity: 'Tokyo',        o: ICN, d: [35.5494, 139.7798] },
+    { origin: 'ICN', dest: 'NRT', originCity: 'Seoul', destCity: 'Narita',       o: ICN, d: [35.7719, 140.3929] },
     { origin: 'PUS', dest: 'OKA', originCity: 'Busan', destCity: 'Okinawa',      o: PUS, d: [26.1958, 127.6458] },
     { origin: 'ICN', dest: 'CJU', originCity: 'Seoul', destCity: 'Jeju',         o: ICN, d: [33.5113, 126.4930] },
     { origin: 'ICN', dest: 'YNY', originCity: 'Seoul', destCity: 'Yangyang',     o: ICN, d: [38.0611, 128.6692] },
     { origin: 'ICN', dest: 'KIX', originCity: 'Seoul', destCity: 'Osaka',        o: ICN, d: [34.4347, 135.2441] },
     { origin: 'ICN', dest: 'NGO', originCity: 'Seoul', destCity: 'Nagoya',       o: ICN, d: [34.8584, 136.8054] },
+    { origin: 'ICN', dest: 'FUK', originCity: 'Seoul', destCity: 'Fukuoka',      o: ICN, d: [33.5859, 130.4506] },
+    { origin: 'ICN', dest: 'CTS', originCity: 'Seoul', destCity: 'Sapporo',      o: ICN, d: [42.7752, 141.6923] },
     { origin: 'ICN', dest: 'TPE', originCity: 'Seoul', destCity: 'Taipei',       o: ICN, d: [25.0797, 121.2342] },
     { origin: 'ICN', dest: 'HKG', originCity: 'Seoul', destCity: 'Hong Kong',    o: ICN, d: [22.3080, 113.9185] },
     { origin: 'ICN', dest: 'PEK', originCity: 'Seoul', destCity: 'Beijing',      o: ICN, d: [40.0799, 116.6031] },
@@ -68,7 +80,7 @@
   // whole dataset stays internally consistent as routes are added.
   const ROUTES = RAW_ROUTES.map((r) => {
     const km = Math.round(haversineKm(r.o, r.d));
-    const minutes = Math.round((km / 850) * 60 + 25);
+    const minutes = minutesForDistance(km);
     return { ...r, km, minutes };
   });
 
@@ -117,58 +129,7 @@
   }
 
   function computeFlightZoom(km) {
-    if (km < 1000) return 9;
-    if (km < 4000) return 8;
-    return 7;
-  }
-
-  /* ---------------------------------------------------------
-     Flight atmosphere — a light day/night tint keyed to the plane's
-     current longitude (approximate local solar time), plus a handful
-     of slow-drifting cloud wisps. Kept deliberately subtle.
-  --------------------------------------------------------- */
-  function estimateLocalHour(lng) {
-    const utcHour = new Date().getUTCHours() + new Date().getUTCMinutes() / 60;
-    return ((utcHour + lng / 15) % 24 + 24) % 24;
-  }
-
-  function updateAtmosphereForPosition(pos) {
-    const el = $('#flight-atmosphere');
-    if (!el || !pos) return;
-    const hour = estimateLocalHour(pos[1]);
-    const isNight = hour < 6 || hour >= 19;
-    el.classList.toggle('atmosphere-night', isNight);
-    el.classList.toggle('atmosphere-day', !isNight);
-  }
-
-  function spawnCloudWisps() {
-    const layer = $('#cloud-layer');
-    if (!layer) return;
-    layer.innerHTML = '';
-    const count = 4;
-    for (let i = 0; i < count; i++) {
-      const el = document.createElement('div');
-      el.className = 'cloud-wisp';
-      const size = 90 + Math.random() * 150;
-      el.style.width = `${size}px`;
-      el.style.height = `${size * 0.34}px`;
-      el.style.top = `${8 + Math.random() * 55}%`;
-      el.style.animationDuration = `${55 + Math.random() * 35}s`;
-      el.style.animationDelay = `-${Math.random() * 60}s`;
-      layer.appendChild(el);
-    }
-  }
-
-  function activateFlightAtmosphere(route) {
-    spawnCloudWisps();
-    updateAtmosphereForPosition(route.o);
-    $('#flight-atmosphere').classList.add('atmosphere-active');
-    $('#cloud-layer').classList.add('cloud-layer-active');
-  }
-
-  function deactivateFlightAtmosphere() {
-    $('#flight-atmosphere').classList.remove('atmosphere-active', 'atmosphere-night', 'atmosphere-day');
-    $('#cloud-layer').classList.remove('cloud-layer-active');
+    return km < 2000 ? 14 : 13;
   }
 
   /* ---------------------------------------------------------
@@ -194,11 +155,11 @@
   };
 
   const FOCUS_TAGS = [
-    { id: 'read', label: 'Read', emoji: '📖' },
-    { id: 'exercise', label: 'Exercise', emoji: '🏋️' },
-    { id: 'work', label: 'Work', emoji: '💼' },
-    { id: 'study', label: 'Study', emoji: '📚' },
-    { id: 'hobby', label: 'Hobby', emoji: '🎨' },
+    { id: 'read', label: 'Read', icon: 'book-open' },
+    { id: 'exercise', label: 'Exercise', icon: 'dumbbell' },
+    { id: 'work', label: 'Work', icon: 'briefcase' },
+    { id: 'study', label: 'Study', icon: 'graduation-cap' },
+    { id: 'hobby', label: 'Hobby', icon: 'palette' },
   ];
   let ticketMeta = { flightNo: randomFlightNo() };
 
@@ -268,6 +229,10 @@
   --------------------------------------------------------- */
   let map, satelliteLayer, darkLayer, currentMapStyle = 'satellite';
   let routeLayerGroup, progressPolyline, remainderPolyline, originMarker, destMarker;
+  // Recommendation markers (world airport badges) are explore-only: they're
+  // removed from the map entirely during flight so Leaflet isn't repositioning
+  // 30+ extra DOM markers on every camera update while tracking.
+  let recommendationLayerGroup;
 
   function geoIcon(kind) {
     return L.divIcon({
@@ -343,15 +308,18 @@
     satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
       attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics',
       maxZoom: 18,
+      maxNativeZoom: 17, // beyond this, Leaflet upscales the last real tile instead of requesting missing ones
     });
     darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
       subdomains: 'abcd',
       maxZoom: 18,
+      maxNativeZoom: 17,
     });
     satelliteLayer.addTo(map);
 
     routeLayerGroup = L.layerGroup().addTo(map);
+    recommendationLayerGroup = L.layerGroup().addTo(map);
 
     // Force a size recalculation once the container has its final layout —
     // without this the map can initialize against a stale/zero size and
@@ -386,15 +354,26 @@
     const circle = ensureRadarCircle();
     if (!circle) return;
     const minutes = minutesOverride != null ? minutesOverride : state.focusMinutes;
-    const radiusKm = (minutes / 60) * 850;
+    const radiusKm = reachableKmForMinutes(minutes);
     circle.setLatLng(state.selectedRoute.o);
     circle.setRadius(radiusKm * 1000);
     circle.bringToBack();
   }
 
+  // Fits the camera to the selected flight path *and* the full radar-circle
+  // extent, so airports sitting near the reachability boundary stay framed
+  // in view instead of being cut off at the viewport edge.
+  function fitMapToRouteAndRadar(path, duration) {
+    if (!map) return;
+    let bounds = L.latLngBounds(path);
+    if (radarCircle) bounds = bounds.extend(radarCircle.getBounds());
+    map.flyToBounds(bounds, { paddingTopLeft: [40, 110], paddingBottomRight: [40, 220], duration });
+  }
+
   function drawRoutePreview(route) {
     if (!map) return;
     routeLayerGroup.clearLayers();
+    recommendationLayerGroup.clearLayers();
     updateRadarCircle();
 
     // Recommended nearby/world airports as clickable IATA badges; the
@@ -404,7 +383,7 @@
     ROUTES.forEach((r) => {
       if (seenDest.has(r.dest) || (r.dest === route.dest && r.origin === route.origin)) return;
       seenDest.add(r.dest);
-      const marker = L.marker(r.d, { icon: airportBadgeIcon(r.dest), interactive: true }).addTo(routeLayerGroup);
+      const marker = L.marker(r.d, { icon: airportBadgeIcon(r.dest), interactive: true }).addTo(recommendationLayerGroup);
       marker.on('click', () => selectRoute(r));
     });
 
@@ -416,7 +395,7 @@
     originMarker = L.marker(route.o, { icon: geoIcon('origin') }).addTo(routeLayerGroup);
     destMarker = L.marker(route.d, { icon: geoIcon('dest') }).addTo(routeLayerGroup);
 
-    map.flyToBounds(L.latLngBounds(path), { paddingTopLeft: [40, 110], paddingBottomRight: [40, 220], duration: 1.3 });
+    fitMapToRouteAndRadar(path, 1.3);
   }
 
   function initMapStyleToggle() {
@@ -557,6 +536,7 @@
     renderRouteCarousel();
     updateExploreSummary();
     updateRadarCircle();
+    if (state.currentArc) fitMapToRouteAndRadar(state.currentArc, 1); // reframe so boundary airports stay in view
   }
 
   function initDurationRuler() {
@@ -667,7 +647,7 @@
       btn.className = 'focus-tag-btn';
       btn.dataset.id = tag.id;
       if (state.selectedPurpose === tag.id) btn.classList.add('selected');
-      btn.innerHTML = `<span class="focus-tag-emoji">${tag.emoji}</span><span>${tag.label}</span>`;
+      btn.innerHTML = `<i data-lucide="${tag.icon}" class="focus-tag-icon"></i><span>${tag.label}</span>`;
       btn.addEventListener('click', () => {
         state.selectedPurpose = tag.id;
         $$('.focus-tag-btn').forEach((b) => b.classList.toggle('selected', b.dataset.id === tag.id));
@@ -786,9 +766,17 @@
   }
 
   let flightAnimFrameId = null;
+  let lastCameraUpdateTime = 0;
+  // The plane marker itself is cheap to move every frame (just a DOM
+  // transform), but map.setView() re-evaluates the whole tile grid on every
+  // call -- at zoom 13-14 that means far more tiles crossing the viewport
+  // per pixel of pan than at the old zoom 7-9, so it's throttled separately
+  // to stop it from re-triggering Leaflet's layout/tile machinery 60x/sec.
+  const CAMERA_UPDATE_INTERVAL_MS = 66; // ~15fps cap for camera pan + trail redraw -- plenty smooth for a slow drift, and cuts tile/layout churn further
 
   function startAnimationLoop() {
     cancelAnimationFrame(flightAnimFrameId);
+    lastCameraUpdateTime = 0;
     const frame = () => {
       if (!state.timer.running || state.timer.paused) return;
       updatePlanePosition(getProgress());
@@ -802,7 +790,7 @@
     flightAnimFrameId = null;
   }
 
-  function updatePlanePosition(progress) {
+  function updatePlanePosition(progress, force) {
     const arc = state.currentArc;
     if (!arc || !map || !planeMarker) return;
     const pos = pointAtProgress(arc, progress);
@@ -810,10 +798,14 @@
     const bearing = bearingBetween(pos, aheadPos);
     planeMarker.setLatLng(pos);
     setPlaneBearing(bearing);
-    map.setView(pos, map.getZoom(), { animate: false });
 
-    const idx = Math.floor(progress * (arc.length - 1));
-    progressPolyline.setLatLngs(arc.slice(0, idx + 1).concat([pos]));
+    const now = performance.now();
+    if (force || now - lastCameraUpdateTime >= CAMERA_UPDATE_INTERVAL_MS) {
+      lastCameraUpdateTime = now;
+      map.setView(pos, map.getZoom(), { animate: false });
+      const idx = Math.floor(progress * (arc.length - 1));
+      progressPolyline.setLatLngs(arc.slice(0, idx + 1).concat([pos]));
+    }
   }
 
   function enterFlightPhase() {
@@ -821,6 +813,14 @@
     $('#flight-hud').classList.remove('hidden');
     $('#topbar-brand').classList.add('topbar-fade-hidden');
     $('#topbar-stats').classList.add('topbar-fade-hidden');
+
+    // Drop the explore-only recommendation markers/radar circle from the map
+    // while tracking -- fewer live layers means less work on every camera update.
+    if (map) {
+      map.removeLayer(recommendationLayerGroup);
+      if (radarCircle) map.removeLayer(radarCircle);
+    }
+
     $('#hud-origin-code').textContent = route.origin;
     $('#hud-dest-code').textContent = route.dest;
     $('#hud-speed-multiplier').querySelector('span').textContent = `${fmtSpeedMultiplier(route.minutes, state.focusMinutes)} speed`;
@@ -841,7 +841,6 @@
     const initialBearing = bearingBetween(startPos, pointAtProgress(state.currentArc, 0.01));
     createPlaneMarker(startPos, initialBearing);
 
-    activateFlightAtmosphere(route);
     playTakeoffChime();
 
     updateHudText();
@@ -883,10 +882,6 @@
     const speedKmh = progress >= 1 ? 0 : baseSpeedKmh * jitter;
     $('#hud-speed').textContent = fmtKm(toDisplayDistance(speedKmh));
     $('#hud-speed-unit').textContent = unit === 'mi' ? 'mph' : 'km/h';
-
-    if (state.currentArc) {
-      updateAtmosphereForPosition(pointAtProgress(state.currentArc, progress));
-    }
   }
 
   function togglePause() {
@@ -910,7 +905,7 @@
     clearInterval(state.timer.intervalId);
     state.timer.running = false;
     stopAnimationLoop();
-    updatePlanePosition(1);
+    updatePlanePosition(1, true);
 
     const route = state.selectedRoute;
     state.stats.totalSeconds += state.timer.totalSeconds;
@@ -959,7 +954,6 @@
     stopAnimationLoop();
     removePlaneMarker();
     stopAmbient();
-    deactivateFlightAtmosphere();
 
     $('#flight-hud').classList.add('hidden');
     $('#topbar-brand').classList.remove('topbar-fade-hidden');
@@ -972,14 +966,14 @@
       map.doubleClickZoom.enable();
       map.touchZoom.enable();
       if (map.tap) map.tap.enable();
+      map.addLayer(recommendationLayerGroup);
+      if (radarCircle) map.addLayer(radarCircle);
     }
 
     $('#explore-panel').classList.remove('hidden');
     $('#boarding-panel').classList.add('hidden');
 
-    if (map && state.currentArc) {
-      map.flyToBounds(L.latLngBounds(state.currentArc), { paddingTopLeft: [40, 110], paddingBottomRight: [40, 220], duration: 1.1 });
-    }
+    if (state.currentArc) fitMapToRouteAndRadar(state.currentArc, 1.1);
   }
 
   /* ---------------------------------------------------------
@@ -1005,7 +999,7 @@
           <div class="history-route">${h.origin} → ${h.dest} ${h.seat ? `· ${h.seat}` : ''}</div>
           <div class="history-meta">
             <span>${h.dateLabel} · ${fmtMinutes(h.minutes)}</span>
-            ${purposeTag ? `<span class="history-purpose">${purposeTag.emoji} ${purposeTag.label}</span>` : ''}
+            ${purposeTag ? `<span class="history-purpose"><i data-lucide="${purposeTag.icon}" class="w-3 h-3"></i>${purposeTag.label}</span>` : ''}
           </div>
         </div>
         <div class="history-km">+${fmtKm(h.km)} km</div>

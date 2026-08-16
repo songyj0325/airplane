@@ -65,49 +65,6 @@ body { background: var(--bg-deep); }
 }
 .geo-pin-badge:hover { background: #ffffff; transform: scale(1.08); }
 
-/* =========================================================
-   Flight atmosphere — subtle day/night tint + drifting clouds
-   ========================================================= */
-#flight-atmosphere {
-  position: fixed;
-  inset: 0;
-  z-index: 15;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 1.2s ease, background 1.5s ease;
-}
-#flight-atmosphere.atmosphere-active { opacity: 1; }
-#flight-atmosphere.atmosphere-night {
-  background: linear-gradient(180deg, rgba(6,10,28,0.4) 0%, rgba(6,10,28,0.08) 42%, transparent 68%);
-}
-#flight-atmosphere.atmosphere-day {
-  background: linear-gradient(180deg, rgba(255,245,214,0.07) 0%, transparent 46%);
-}
-
-#cloud-layer {
-  position: fixed;
-  inset: 0;
-  z-index: 16;
-  pointer-events: none;
-  overflow: hidden;
-  opacity: 0;
-  transition: opacity 1s ease;
-}
-#cloud-layer.cloud-layer-active { opacity: 1; }
-.cloud-wisp {
-  position: absolute;
-  left: -25vw;
-  background: rgba(255,255,255,0.55);
-  border-radius: 50%;
-  filter: blur(9px);
-  opacity: 0.16;
-  animation: cloudDrift linear infinite;
-}
-@keyframes cloudDrift {
-  from { transform: translateX(0); }
-  to { transform: translateX(150vw); }
-}
-
 /* Real airplane marker (Leaflet divIcon, moves along the route) */
 .plane-marker { background: transparent; border: none; }
 .plane-marker-rotor {
@@ -751,10 +708,11 @@ body { background: var(--bg-deep); }
   cursor: pointer;
   transition: all .15s ease;
 }
-.focus-tag-emoji {
-  font-size: 26px;
-  line-height: 1;
-  filter: grayscale(100%) brightness(2);
+.focus-tag-icon {
+  width: 26px;
+  height: 26px;
+  color: #4ade80;
+  stroke-width: 1.75;
 }
 .focus-tag-btn:hover { border-color: rgba(16,185,129,0.5); color: #fff; }
 .focus-tag-btn.selected {
