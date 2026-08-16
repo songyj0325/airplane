@@ -269,6 +269,8 @@
     audio: { ctx: null, volume: 0.35, activeKind: null },
     hud: { unit: 'km' },
     pureModeActive: false,
+    windowViewActive: false,
+    windowViewTime: 'morning',
   };
 
   const FOCUS_TAGS = [
@@ -1162,6 +1164,11 @@
     $('#pure-mode-plane-icon').style.left = `${progress * 100}%`;
     $('#pure-mode-pct').textContent = pct;
 
+    // Window View's overlay panel mirrors the same values, same reasoning.
+    $('#window-view-timer').textContent = fmtTimer(state.timer.remainingSeconds);
+    $('#window-view-progress-fill').style.width = `${progress * 100}%`;
+    $('#window-view-pct').textContent = pct;
+
     const remainingKm = Math.max(0, route.km * (1 - progress));
     $('#hud-distance').textContent = fmtKm(toDisplayDistance(remainingKm));
     $('#hud-unit-label').textContent = unit;
@@ -1198,6 +1205,7 @@
     stopAnimationLoop();
     stopPeriodicChimes();
     exitPureMode();
+    exitWindowView();
     updatePlanePosition(1, true);
 
     const route = state.selectedRoute;
@@ -1243,6 +1251,7 @@
     stopPeriodicChimes();
     stopAnnouncements();
     exitPureMode();
+    exitWindowView();
     removePlaneMarker();
     stopAmbient();
 
@@ -1790,6 +1799,7 @@
   --------------------------------------------------------- */
   async function enterPureMode() {
     if (state.pureModeActive) return;
+    exitWindowView(); // the two full-view overlays are mutually exclusive
     state.pureModeActive = true;
     $('#pure-mode-layer').classList.remove('hidden');
     document.body.classList.add('pure-mode-active');
@@ -1839,6 +1849,64 @@
       const now = Date.now();
       if (now - lastTapAt < 350) exitPureMode();
       lastTapAt = now;
+    });
+  }
+
+  /* ---------------------------------------------------------
+     Window View -- a looping real-video "airplane window" overlay
+     (Morning / Daytime / Night), with the same timer/progress readout as
+     Pure Mode. Mutually exclusive with Pure Mode since both replace the
+     main flight view.
+  --------------------------------------------------------- */
+  function setWindowViewTime(time) {
+    if (time !== 'morning' && time !== 'daytime' && time !== 'night') return;
+    state.windowViewTime = time;
+    $$('.window-view-time-btn').forEach((btn) => btn.classList.toggle('active', btn.dataset.time === time));
+    $$('.window-view-video').forEach((video) => {
+      const isActive = video.dataset.time === time;
+      video.classList.toggle('hidden', !isActive);
+      if (isActive) {
+        video.muted = true; // belt-and-suspenders alongside the muted attribute, for autoplay eligibility
+        video.play().catch(() => { /* still shows the frame; browser may just be deferring playback */ });
+      } else {
+        video.pause();
+      }
+    });
+  }
+
+  function enterWindowView() {
+    if (state.windowViewActive) return;
+    exitPureMode(); // the two full-view overlays are mutually exclusive
+    state.windowViewActive = true;
+    $('#window-view-layer').classList.remove('hidden');
+    document.body.classList.add('window-view-active');
+    setWindowViewTime(state.windowViewTime);
+    updateHudText();
+  }
+
+  function exitWindowView() {
+    if (!state.windowViewActive) return;
+    state.windowViewActive = false;
+    $('#window-view-layer').classList.add('hidden');
+    document.body.classList.remove('window-view-active');
+    $$('.window-view-video').forEach((video) => video.pause());
+  }
+
+  function toggleWindowView() {
+    if (state.windowViewActive) exitWindowView(); else enterWindowView();
+  }
+
+  function initWindowView() {
+    $('#window-view-toggle-btn').addEventListener('click', toggleWindowView);
+    $('#window-view-exit-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      exitWindowView();
+    });
+    $$('.window-view-time-btn').forEach((btn) => {
+      btn.addEventListener('click', () => setWindowViewTime(btn.dataset.time));
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && state.windowViewActive) exitWindowView();
     });
   }
 
@@ -1900,6 +1968,7 @@
     initFlightControls();
     initMapStyleToggle();
     initPureMode();
+    initWindowView();
     primeSpeechVoices();
 
     refreshIcons();

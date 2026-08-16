@@ -996,6 +996,133 @@ body.pure-mode-active #map {
 }
 
 /* =========================================================
+   Window View (looping video window + timer overlay)
+   ========================================================= */
+.window-view-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 150; /* same tier as Pure Mode; the two are mutually exclusive */
+  background: var(--bg-deep);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+  padding: 24px;
+}
+
+.window-view-time-picker {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.window-view-time-btn {
+  padding: 8px 20px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: rgba(226,225,240,0.55);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  min-height: 36px;
+  transition: background .15s ease, color .15s ease;
+}
+.window-view-time-btn:hover { color: #fff; }
+.window-view-time-btn.active { background: var(--neon); color: #04120c; }
+
+/* A rounded-rect box this portrait-shaped, with a symmetric percentage
+   border-radius, resolves to the classic rounded "airplane window" silhouette
+   -- the video is clipped to exactly that shape by the container's overflow. */
+.window-frame {
+  position: relative;
+  width: min(74vw, 320px);
+  aspect-ratio: 3 / 4;
+  max-height: 56vh;
+  border-radius: 46%;
+  overflow: hidden;
+  background: #000;
+  border: 10px solid var(--surface);
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.08), 0 20px 50px rgba(0,0,0,0.55);
+}
+.window-view-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.window-overlay-panel {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  width: calc(100% - 36px);
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(10,10,10,0.45);
+  text-align: center;
+}
+.window-overlay-timer {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 800;
+  font-size: clamp(1.5rem, 7vw, 2.1rem);
+  color: #fff;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.9);
+  line-height: 1;
+  margin-bottom: 8px;
+}
+.window-overlay-progress-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.25);
+  overflow: hidden;
+}
+.window-overlay-progress-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: var(--neon);
+  transition: width 1s linear;
+}
+.window-overlay-pct {
+  margin-top: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: rgba(255,255,255,0.9);
+  text-shadow: 0 1px 5px rgba(0,0,0,0.85);
+}
+.window-overlay-pct span { color: var(--neon); font-weight: 800; }
+
+.window-view-exit-btn {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 10px 22px;
+  border-radius: 10px;
+  background: var(--bg-deep);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: rgba(226,225,240,0.8);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color .15s ease, color .15s ease;
+}
+.window-view-exit-btn:hover { border-color: var(--neon); color: #fff; }
+
+body.window-view-active #top-bar,
+body.window-view-active #flight-hud .hud-topright,
+body.window-view-active #flight-hud .hud-bottomleft,
+body.window-view-active #flight-hud .hud-controls,
+body.window-view-active #flight-hud .hud-topleft,
+body.window-view-active #map {
+  visibility: hidden;
+}
+
+/* =========================================================
    Responsive (tablet, then phone -- narrower breakpoints are
    declared later so they win the cascade on the smallest screens)
    ========================================================= */

@@ -179,6 +179,9 @@
 
   <!-- bottom-center: controls -->
   <div class="hud-layer hud-controls">
+    <button id="window-view-toggle-btn" class="icon-pill" title="Window View">
+      <i data-lucide="cloud" class="w-4 h-4"></i>
+    </button>
     <button id="pure-mode-toggle-btn" class="icon-pill" title="Full Screen / Pure Mode">
       <i data-lucide="maximize" class="w-4 h-4"></i>
     </button>
@@ -215,6 +218,34 @@
     <div class="pure-mode-pct"><span id="pure-mode-pct">0</span>%</div>
   </div>
   <button id="pure-mode-exit-btn" class="pure-mode-exit-btn" type="button">Exit Pure</button>
+</div>
+
+<!-- ===================== WINDOW VIEW (looping video window + timer) ===================== -->
+<div id="window-view-layer" class="window-view-layer hidden">
+  <div class="window-view-time-picker">
+    <button class="window-view-time-btn active" data-time="morning" type="button">Morning</button>
+    <button class="window-view-time-btn" data-time="daytime" type="button">Daytime</button>
+    <button class="window-view-time-btn" data-time="night" type="button">Night</button>
+  </div>
+
+  <div class="window-frame">
+    <video class="window-view-video" data-time="morning" autoplay loop muted playsinline
+      src="https://assets.mixkit.co/videos/4368/4368-720.mp4"></video>
+    <video class="window-view-video hidden" data-time="daytime" autoplay loop muted playsinline
+      src="https://assets.mixkit.co/videos/3099/3099-720.mp4"></video>
+    <video class="window-view-video hidden" data-time="night" autoplay loop muted playsinline
+      src="https://assets.mixkit.co/videos/3361/3361-720.mp4"></video>
+
+    <div class="window-overlay-panel">
+      <div class="window-overlay-timer" id="window-view-timer">00:00</div>
+      <div class="window-overlay-progress-track">
+        <div class="window-overlay-progress-fill" id="window-view-progress-fill"></div>
+      </div>
+      <div class="window-overlay-pct"><span id="window-view-pct">0</span>% complete</div>
+    </div>
+  </div>
+
+  <button id="window-view-exit-btn" class="window-view-exit-btn" type="button">Exit Window View</button>
 </div>
 
 <!-- ===================== TEMPLATES ===================== -->
