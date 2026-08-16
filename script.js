@@ -9,7 +9,6 @@
      Data
   --------------------------------------------------------- */
   const ICN = [37.4602, 126.4407];
-  const PUS = [35.1795, 128.9382];
 
   function haversineKm(o, d) {
     const R = 6371;
@@ -27,61 +26,106 @@
   const minutesForDistance = (km) => Math.round((km / CRUISE_SPEED_KMH) * 60 + FLIGHT_OVERHEAD_MINUTES);
   const reachableKmForMinutes = (minutes) => Math.max(0, minutes - FLIGHT_OVERHEAD_MINUTES) / 60 * CRUISE_SPEED_KMH;
 
-  const RAW_ROUTES = [
-    // Asia — Korea / Japan (short-haul, populate the small-radius end densely)
-    { origin: 'ICN', dest: 'GMP', originCity: 'Seoul', destCity: 'Gimpo',        o: ICN, d: [37.5583, 126.7906] },
-    { origin: 'ICN', dest: 'HND', originCity: 'Seoul', destCity: 'Tokyo',        o: ICN, d: [35.5494, 139.7798] },
-    { origin: 'ICN', dest: 'NRT', originCity: 'Seoul', destCity: 'Narita',       o: ICN, d: [35.7719, 140.3929] },
-    { origin: 'PUS', dest: 'OKA', originCity: 'Busan', destCity: 'Okinawa',      o: PUS, d: [26.1958, 127.6458] },
-    { origin: 'ICN', dest: 'CJU', originCity: 'Seoul', destCity: 'Jeju',         o: ICN, d: [33.5113, 126.4930] },
-    { origin: 'ICN', dest: 'YNY', originCity: 'Seoul', destCity: 'Yangyang',     o: ICN, d: [38.0611, 128.6692] },
-    { origin: 'ICN', dest: 'KIX', originCity: 'Seoul', destCity: 'Osaka',        o: ICN, d: [34.4347, 135.2441] },
-    { origin: 'ICN', dest: 'NGO', originCity: 'Seoul', destCity: 'Nagoya',       o: ICN, d: [34.8584, 136.8054] },
-    { origin: 'ICN', dest: 'FUK', originCity: 'Seoul', destCity: 'Fukuoka',      o: ICN, d: [33.5859, 130.4506] },
-    { origin: 'ICN', dest: 'CTS', originCity: 'Seoul', destCity: 'Sapporo',      o: ICN, d: [42.7752, 141.6923] },
-    { origin: 'ICN', dest: 'TPE', originCity: 'Seoul', destCity: 'Taipei',       o: ICN, d: [25.0797, 121.2342] },
-    { origin: 'ICN', dest: 'HKG', originCity: 'Seoul', destCity: 'Hong Kong',    o: ICN, d: [22.3080, 113.9185] },
-    { origin: 'ICN', dest: 'PEK', originCity: 'Seoul', destCity: 'Beijing',      o: ICN, d: [40.0799, 116.6031] },
-    { origin: 'ICN', dest: 'PVG', originCity: 'Seoul', destCity: 'Shanghai',     o: ICN, d: [31.1443, 121.8083] },
-    { origin: 'ICN', dest: 'MNL', originCity: 'Seoul', destCity: 'Manila',       o: ICN, d: [14.5086, 121.0194] },
-    { origin: 'ICN', dest: 'BKK', originCity: 'Seoul', destCity: 'Bangkok',      o: ICN, d: [13.6900, 100.7501] },
-    { origin: 'ICN', dest: 'SIN', originCity: 'Seoul', destCity: 'Singapore',    o: ICN, d: [1.3644, 103.9915] },
-    { origin: 'ICN', dest: 'KUL', originCity: 'Seoul', destCity: 'Kuala Lumpur', o: ICN, d: [2.7456, 101.7099] },
-    { origin: 'ICN', dest: 'CGK', originCity: 'Seoul', destCity: 'Jakarta',      o: ICN, d: [-6.1256, 106.6559] },
-    { origin: 'ICN', dest: 'DEL', originCity: 'Seoul', destCity: 'Delhi',        o: ICN, d: [28.5562, 77.1000] },
-    { origin: 'ICN', dest: 'BOM', originCity: 'Seoul', destCity: 'Mumbai',       o: ICN, d: [19.0887, 72.8679] },
-    // Middle East
-    { origin: 'ICN', dest: 'DXB', originCity: 'Seoul', destCity: 'Dubai',       o: ICN, d: [25.2532, 55.3657] },
-    { origin: 'ICN', dest: 'DOH', originCity: 'Seoul', destCity: 'Doha',        o: ICN, d: [25.2731, 51.6080] },
-    { origin: 'ICN', dest: 'IST', originCity: 'Seoul', destCity: 'Istanbul',    o: ICN, d: [41.2753, 28.7519] },
-    // Europe
-    { origin: 'ICN', dest: 'CDG', originCity: 'Seoul', destCity: 'Paris',      o: ICN, d: [49.0097, 2.5479] },
-    { origin: 'ICN', dest: 'LHR', originCity: 'Seoul', destCity: 'London',     o: ICN, d: [51.4700, -0.4543] },
-    { origin: 'ICN', dest: 'FRA', originCity: 'Seoul', destCity: 'Frankfurt',  o: ICN, d: [50.0379, 8.5622] },
-    { origin: 'ICN', dest: 'AMS', originCity: 'Seoul', destCity: 'Amsterdam',  o: ICN, d: [52.3105, 4.7683] },
-    { origin: 'ICN', dest: 'FCO', originCity: 'Seoul', destCity: 'Rome',       o: ICN, d: [41.8003, 12.2389] },
-    { origin: 'ICN', dest: 'MAD', originCity: 'Seoul', destCity: 'Madrid',     o: ICN, d: [40.4983, -3.5676] },
-    // Americas
-    { origin: 'ICN', dest: 'JFK', originCity: 'Seoul', destCity: 'New York',     o: ICN, d: [40.6413, -73.7781] },
-    { origin: 'ICN', dest: 'LAX', originCity: 'Seoul', destCity: 'Los Angeles',  o: ICN, d: [33.9416, -118.4085] },
-    { origin: 'ICN', dest: 'ORD', originCity: 'Seoul', destCity: 'Chicago',      o: ICN, d: [41.9742, -87.9073] },
-    { origin: 'ICN', dest: 'YVR', originCity: 'Seoul', destCity: 'Vancouver',    o: ICN, d: [49.1967, -123.1815] },
-    { origin: 'ICN', dest: 'GRU', originCity: 'Seoul', destCity: 'Sao Paulo',    o: ICN, d: [-23.4356, -46.4731] },
-    // Oceania
-    { origin: 'ICN', dest: 'SYD', originCity: 'Seoul', destCity: 'Sydney',   o: ICN, d: [-33.9399, 151.1753] },
-    { origin: 'ICN', dest: 'AKL', originCity: 'Seoul', destCity: 'Auckland', o: ICN, d: [-36.9986, 174.7920] },
-    // Africa
-    { origin: 'ICN', dest: 'JNB', originCity: 'Seoul', destCity: 'Johannesburg', o: ICN, d: [-26.1392, 28.2460] },
-    { origin: 'ICN', dest: 'CAI', originCity: 'Seoul', destCity: 'Cairo',        o: ICN, d: [30.1219, 31.4056] },
+  // 150+ major world airports -- [IATA code, city, lat, lng]. Every flight
+  // originates from ICN (the hub); km/minutes are derived from these
+  // coordinates via Haversine great-circle distance, so the whole dataset
+  // (and the radar circle below) stays mathematically consistent.
+  const AIRPORT_DATA = [
+    // North America (30)
+    ['LAX', 'Los Angeles', 33.9416, -118.4085], ['JFK', 'New York', 40.6413, -73.7781],
+    ['SFO', 'San Francisco', 37.6213, -122.3790], ['SJC', 'San Jose', 37.3639, -121.9289],
+    ['SEA', 'Seattle', 47.4502, -122.3088], ['ORD', 'Chicago', 41.9742, -87.9073],
+    ['MIA', 'Miami', 25.7959, -80.2870], ['DFW', 'Dallas', 32.8998, -97.0403],
+    ['ATL', 'Atlanta', 33.6407, -84.4277], ['BOS', 'Boston', 42.3656, -71.0096],
+    ['LAS', 'Las Vegas', 36.0840, -115.1537], ['DEN', 'Denver', 39.8561, -104.6737],
+    ['IAH', 'Houston', 29.9902, -95.3368], ['YVR', 'Vancouver', 49.1967, -123.1815],
+    ['YYZ', 'Toronto', 43.6777, -79.6248], ['YUL', 'Montreal', 45.4706, -73.7408],
+    ['MEX', 'Mexico City', 19.4363, -99.0721], ['CUN', 'Cancun', 21.0365, -86.8771],
+    ['PHX', 'Phoenix', 33.4342, -112.0116], ['IAD', 'Washington D.C.', 38.9531, -77.4565],
+    ['EWR', 'Newark', 40.6895, -74.1745], ['MSP', 'Minneapolis', 44.8848, -93.2223],
+    ['DTW', 'Detroit', 42.2124, -83.3534], ['PHL', 'Philadelphia', 39.8744, -75.2424],
+    ['SAN', 'San Diego', 32.7338, -117.1933], ['PDX', 'Portland', 45.5898, -122.5951],
+    ['HNL', 'Honolulu', 21.3245, -157.9251], ['YYC', 'Calgary', 51.1315, -114.0106],
+    ['YOW', 'Ottawa', 45.3225, -75.6692], ['GDL', 'Guadalajara', 20.5218, -103.3111],
+    // South America (16)
+    ['GRU', 'Sao Paulo', -23.4356, -46.4731], ['GIG', 'Rio de Janeiro', -22.8090, -43.2506],
+    ['BOG', 'Bogota', 4.7016, -74.1469], ['EZE', 'Buenos Aires', -34.8222, -58.5358],
+    ['SCL', 'Santiago', -33.3930, -70.7858], ['LIM', 'Lima', -12.0219, -77.1143],
+    ['UIO', 'Quito', -0.1292, -78.3575], ['SJO', 'San Jose', 9.9981, -84.2041],
+    ['LPB', 'La Paz', -16.5133, -68.1925], ['MVD', 'Montevideo', -34.8384, -56.0308],
+    ['CCS', 'Caracas', 10.6013, -66.9911], ['PTY', 'Panama City', 9.0714, -79.3835],
+    ['ASU', 'Asuncion', -25.2400, -57.5200], ['GYE', 'Guayaquil', -2.1574, -79.8836],
+    ['CUZ', 'Cusco', -13.5357, -71.9388], ['FOR', 'Fortaleza', -3.7763, -38.5326],
+    // Europe (40)
+    ['LHR', 'London', 51.4700, -0.4543], ['LGW', 'London Gatwick', 51.1537, -0.1821],
+    ['CDG', 'Paris', 49.0097, 2.5479], ['ORY', 'Paris Orly', 48.7233, 2.3794],
+    ['FRA', 'Frankfurt', 50.0379, 8.5622], ['MUC', 'Munich', 48.3538, 11.7861],
+    ['AMS', 'Amsterdam', 52.3105, 4.7683], ['MAD', 'Madrid', 40.4983, -3.5676],
+    ['BCN', 'Barcelona', 41.2974, 2.0833], ['FCO', 'Rome', 41.8003, 12.2389],
+    ['MXP', 'Milan', 45.6306, 8.7281], ['ZRH', 'Zurich', 47.4647, 8.5492],
+    ['VIE', 'Vienna', 48.1103, 16.5697], ['CPH', 'Copenhagen', 55.6180, 12.6560],
+    ['ARN', 'Stockholm', 59.6519, 17.9186], ['OSL', 'Oslo', 60.1939, 11.1004],
+    ['HEL', 'Helsinki', 60.3172, 24.9633], ['PRG', 'Prague', 50.1008, 14.2600],
+    ['BUD', 'Budapest', 47.4298, 19.2611], ['ATH', 'Athens', 37.9364, 23.9445],
+    ['IST', 'Istanbul', 41.2753, 28.7519], ['WAW', 'Warsaw', 52.1657, 20.9671],
+    ['DUB', 'Dublin', 53.4213, -6.2701], ['BRU', 'Brussels', 50.9014, 4.4844],
+    ['GVA', 'Geneva', 46.2381, 6.1090], ['LIS', 'Lisbon', 38.7813, -9.1359],
+    ['MAN', 'Manchester', 53.3537, -2.2750], ['EDI', 'Edinburgh', 55.9500, -3.3725],
+    ['OTP', 'Bucharest', 44.5711, 26.0850], ['SOF', 'Sofia', 42.6952, 23.4062],
+    ['BEG', 'Belgrade', 44.8184, 20.3091], ['ZAG', 'Zagreb', 45.7429, 16.0688],
+    ['LJU', 'Ljubljana', 46.2237, 14.4576], ['KEF', 'Reykjavik', 63.9850, -22.6056],
+    ['SVO', 'Moscow', 55.9726, 37.4146], ['LED', 'St Petersburg', 59.8003, 30.2625],
+    ['NCE', 'Nice', 43.6584, 7.2159], ['BER', 'Berlin', 52.3667, 13.5033],
+    ['HAM', 'Hamburg', 53.6304, 9.9882], ['MLA', 'Malta', 35.8575, 14.4775],
+    // Asia / Korea (32, excluding the ICN hub itself)
+    ['GMP', 'Gimpo', 37.5583, 126.7906], ['PUS', 'Busan', 35.1795, 128.9382],
+    ['CJU', 'Jeju', 33.5113, 126.4930], ['YNY', 'Yangyang', 38.0611, 128.6692],
+    ['TAE', 'Daegu', 35.8941, 128.6589], ['KWJ', 'Gwangju', 35.1264, 126.8089],
+    ['HND', 'Tokyo', 35.5494, 139.7798], ['NRT', 'Narita', 35.7719, 140.3929],
+    ['KIX', 'Osaka', 34.4347, 135.2441], ['NGO', 'Nagoya', 34.8584, 136.8054],
+    ['FUK', 'Fukuoka', 33.5859, 130.4506], ['CTS', 'Sapporo', 42.7752, 141.6923],
+    ['OKA', 'Okinawa', 26.1958, 127.6458], ['PEK', 'Beijing', 40.0799, 116.6031],
+    ['PVG', 'Shanghai', 31.1443, 121.8083], ['CAN', 'Guangzhou', 23.3924, 113.2988],
+    ['CTU', 'Chengdu', 30.5785, 103.9471], ['TPE', 'Taipei', 25.0797, 121.2342],
+    ['HKG', 'Hong Kong', 22.3080, 113.9185], ['MFM', 'Macau', 22.1496, 113.5915],
+    ['BKK', 'Bangkok', 13.6900, 100.7501], ['SIN', 'Singapore', 1.3644, 103.9915],
+    ['KUL', 'Kuala Lumpur', 2.7456, 101.7099], ['SGN', 'Ho Chi Minh City', 10.8188, 106.6520],
+    ['HAN', 'Hanoi', 21.2212, 105.8072], ['MNL', 'Manila', 14.5086, 121.0194],
+    ['DEL', 'Delhi', 28.5562, 77.1000], ['BOM', 'Mumbai', 19.0887, 72.8679],
+    ['CGK', 'Jakarta', -6.1256, 106.6559], ['DPS', 'Bali', -8.7482, 115.1672],
+    ['PNH', 'Phnom Penh', 11.5466, 104.8441], ['RGN', 'Yangon', 16.9073, 96.1332],
+    // Oceania / Middle East / Africa (36)
+    ['SYD', 'Sydney', -33.9399, 151.1753], ['MEL', 'Melbourne', -37.6690, 144.8410],
+    ['BNE', 'Brisbane', -27.3842, 153.1175], ['PER', 'Perth', -31.9385, 115.9672],
+    ['AKL', 'Auckland', -36.9986, 174.7920], ['CHC', 'Christchurch', -43.4894, 172.5320],
+    ['DXB', 'Dubai', 25.2532, 55.3657], ['AUH', 'Abu Dhabi', 24.4330, 54.6511],
+    ['DOH', 'Doha', 25.2731, 51.6080], ['JNB', 'Johannesburg', -26.1392, 28.2460],
+    ['CPT', 'Cape Town', -33.9715, 18.6021], ['CAI', 'Cairo', 30.1219, 31.4056],
+    ['CMN', 'Casablanca', 33.3675, -7.5898], ['NBO', 'Nairobi', -1.3192, 36.9278],
+    ['ADD', 'Addis Ababa', 8.9779, 38.7993], ['LOS', 'Lagos', 6.5774, 3.3212],
+    ['ACC', 'Accra', 5.6052, -0.1668], ['TUN', 'Tunis', 36.8510, 10.2272],
+    ['ALG', 'Algiers', 36.6910, 3.2154], ['RUH', 'Riyadh', 24.9576, 46.6988],
+    ['JED', 'Jeddah', 21.6796, 39.1565], ['AMM', 'Amman', 31.7226, 35.9932],
+    ['TLV', 'Tel Aviv', 32.0114, 34.8867], ['BAH', 'Bahrain', 26.2708, 50.6336],
+    ['KWI', 'Kuwait City', 29.2266, 47.9689], ['MCT', 'Muscat', 23.5933, 58.2844],
+    ['WLG', 'Wellington', -41.3272, 174.8053], ['NAN', 'Nadi', -17.7554, 177.4434],
+    ['GUM', 'Guam', 13.4834, 144.7960], ['NOU', 'Noumea', -22.0146, 166.2130],
+    ['MRU', 'Mauritius', -20.4302, 57.6836], ['SEZ', 'Seychelles', -4.6743, 55.5218],
+    ['DAR', 'Dar es Salaam', -6.8781, 39.2026], ['HRE', 'Harare', -17.9318, 31.0928],
+    ['MPM', 'Maputo', -25.9208, 32.5726], ['EBB', 'Entebbe', 0.0424, 32.4435],
   ];
 
-  // km/minutes are derived from the coordinates themselves (great-circle
-  // distance at a realistic cruise speed + takeoff/landing overhead) so the
-  // whole dataset stays internally consistent as routes are added.
-  const ROUTES = RAW_ROUTES.map((r) => {
-    const km = Math.round(haversineKm(r.o, r.d));
-    const minutes = minutesForDistance(km);
-    return { ...r, km, minutes };
+  const AIRPORTS = AIRPORT_DATA.map(([code, city, lat, lng]) => ({ code, city, lat, lng }));
+
+  // Every route originates from Seoul/ICN; km + minutes are derived from the
+  // coordinates so the dataset (and the radar circle) never drift out of sync.
+  const ROUTES = AIRPORTS.map((a) => {
+    const o = ICN, d = [a.lat, a.lng];
+    const km = Math.round(haversineKm(o, d));
+    return {
+      origin: 'ICN', dest: a.code, originCity: 'Seoul', destCity: a.city,
+      o, d, km, minutes: minutesForDistance(km),
+    };
   });
 
   const STORAGE_STATS = 'pomoflight.stats.v1';
@@ -96,16 +140,43 @@
   const toRad = (d) => (d * Math.PI) / 180;
   const toDeg = (r) => (r * 180) / Math.PI;
 
+  // Great-circle (geodesic) path between two points, via spherical linear
+  // interpolation (slerp) of their unit vectors -- this is the same curve
+  // real long-haul flights follow (e.g. bowing north over Siberia/the
+  // Arctic on a Seoul-New York routing), not a naive straight line on the
+  // lat/lng grid.
+  function latLngToVec(lat, lng) {
+    const φ = toRad(lat), λ = toRad(lng);
+    return [Math.cos(φ) * Math.cos(λ), Math.cos(φ) * Math.sin(λ), Math.sin(φ)];
+  }
+  function vecToLatLng(v) {
+    return [toDeg(Math.asin(Math.max(-1, Math.min(1, v[2])))), toDeg(Math.atan2(v[1], v[0]))];
+  }
+  function slerpVec(v0, v1, t) {
+    const dot = Math.max(-1, Math.min(1, v0[0] * v1[0] + v0[1] * v1[1] + v0[2] * v1[2]));
+    const theta = Math.acos(dot) * t;
+    const rx = v1[0] - v0[0] * dot, ry = v1[1] - v0[1] * dot, rz = v1[2] - v0[2] * dot;
+    const rLen = Math.sqrt(rx * rx + ry * ry + rz * rz);
+    if (rLen < 1e-10) return v0;
+    const ux = rx / rLen, uy = ry / rLen, uz = rz / rLen;
+    const cosT = Math.cos(theta), sinT = Math.sin(theta);
+    return [v0[0] * cosT + ux * sinT, v0[1] * cosT + uy * sinT, v0[2] * cosT + uz * sinT];
+  }
+
   function buildFlightPath(o, d, segments = 100) {
-    const lat1 = o[0], lng1 = o[1], lat2 = d[0];
-    let dLng = d[1] - lng1;
-    if (dLng > 180) dLng -= 360;
-    if (dLng < -180) dLng += 360;
-    const lng2u = lng1 + dLng;
+    const v0 = latLngToVec(o[0], o[1]);
+    const v1 = latLngToVec(d[0], d[1]);
     const pts = [];
+    let prevLng = o[1];
     for (let i = 0; i <= segments; i++) {
-      const t = i / segments;
-      pts.push([lat1 + (lat2 - lat1) * t, lng1 + (lng2u - lng1) * t]);
+      const [lat, lngRaw] = vecToLatLng(slerpVec(v0, v1, i / segments));
+      // Unwrap longitude across the antimeridian so the polyline never
+      // draws a spurious seam across the whole map.
+      let lng = lngRaw;
+      while (lng - prevLng > 180) lng -= 360;
+      while (lng - prevLng < -180) lng += 360;
+      prevLng = lng;
+      pts.push([lat, lng]);
     }
     return pts;
   }
@@ -128,6 +199,27 @@
     return [p0[0] + (p1[0] - p0[0]) * frac, p0[1] + (p1[1] - p0[1]) * frac];
   }
 
+  // Destination point given a start coordinate, initial bearing and
+  // great-circle distance -- the exact inverse of Haversine, and the
+  // building block for a properly geodesic (not flat-ellipse) radar ring.
+  function destinationPoint(lat, lng, bearingDeg, distanceKm) {
+    const R = 6371;
+    const δ = distanceKm / R;
+    const θ = toRad(bearingDeg);
+    const φ1 = toRad(lat), λ1 = toRad(lng);
+    const φ2 = Math.asin(Math.sin(φ1) * Math.cos(δ) + Math.cos(φ1) * Math.sin(δ) * Math.cos(θ));
+    const λ2 = λ1 + Math.atan2(Math.sin(θ) * Math.sin(δ) * Math.cos(φ1), Math.cos(δ) - Math.sin(φ1) * Math.sin(φ2));
+    return [toDeg(φ2), ((toDeg(λ2) + 540) % 360) - 180];
+  }
+
+  function buildGeodesicRing(center, radiusKm, segments = 72) {
+    const pts = [];
+    for (let i = 0; i <= segments; i++) {
+      pts.push(destinationPoint(center[0], center[1], (360 / segments) * i, radiusKm));
+    }
+    return pts;
+  }
+
   function computeFlightZoom(km) {
     return km < 2000 ? 14 : 13;
   }
@@ -136,7 +228,7 @@
      State
   --------------------------------------------------------- */
   const state = {
-    selectedRoute: ROUTES[1],
+    selectedRoute: ROUTES.find((r) => r.dest === 'HND') || ROUTES[0],
     selectedSeat: null,
     selectedPurpose: 'work',
     focusMinutes: 30, // user-set session length, independent of the route's real-world duration
@@ -231,8 +323,39 @@
   let routeLayerGroup, progressPolyline, remainderPolyline, originMarker, destMarker;
   // Recommendation markers (world airport badges) are explore-only: they're
   // removed from the map entirely during flight so Leaflet isn't repositioning
-  // 30+ extra DOM markers on every camera update while tracking.
+  // 150+ extra DOM markers on every camera update while tracking. They're
+  // also built exactly once and cached by IATA code -- with 150+ of them,
+  // destroying and recreating every DOM node on each route selection was
+  // the single biggest source of jank, far more than the map pan itself.
   let recommendationLayerGroup;
+  const airportMarkerCache = new Map(); // code -> L.Marker
+
+  function ensureAirportBadges() {
+    if (airportMarkerCache.size > 0) return;
+    ROUTES.forEach((r) => {
+      const marker = L.marker(r.d, { icon: airportBadgeIcon(r.dest), interactive: true }).addTo(recommendationLayerGroup);
+      marker.on('click', () => selectRoute(r));
+      airportMarkerCache.set(r.dest, marker);
+    });
+  }
+
+  function setBadgeHidden(code, hidden) {
+    const marker = airportMarkerCache.get(code);
+    const el = marker && marker.getElement();
+    if (el) el.style.display = hidden ? 'none' : '';
+  }
+
+  // Only expose badges for airports that actually fall within the current
+  // focus-duration-derived reachable radius -- the map should "unlock" more
+  // destinations as the ruler grows (from a couple nearby at 30m to most of
+  // the world at 14h), instead of showing all 150+ codes at once regardless
+  // of the selected duration.
+  function updateBadgeVisibility(radiusKm) {
+    if (airportMarkerCache.size === 0) return;
+    ROUTES.forEach((r) => {
+      setBadgeHidden(r.dest, r.dest === state.selectedRoute.dest || r.km > radiusKm);
+    });
+  }
 
   function geoIcon(kind) {
     return L.divIcon({
@@ -337,11 +460,16 @@
   // every ruler-scroll tick without redrawing the rest of the map.
   let radarCircle = null;
 
+  // L.circle renders a constant-*pixel*-radius SVG ellipse, which is only
+  // an approximation of true ground distance once you're far from the
+  // equator (Mercator's east-west stretch grows with latitude). Building
+  // the boundary from real destinationPoint() coordinates at each bearing
+  // makes it a genuine geodesic ring, so an airport at exactly the
+  // reachable distance lands exactly on the line regardless of latitude.
   function ensureRadarCircle() {
     if (!map) return null;
     if (!radarCircle) {
-      radarCircle = L.circle(state.selectedRoute.o, {
-        radius: 0,
+      radarCircle = L.polygon([state.selectedRoute.o], {
         color: '#10B981', weight: 1.5, opacity: 0.55,
         dashArray: '5,8', fill: true, fillColor: '#10B981', fillOpacity: 0.035,
         interactive: false,
@@ -355,9 +483,9 @@
     if (!circle) return;
     const minutes = minutesOverride != null ? minutesOverride : state.focusMinutes;
     const radiusKm = reachableKmForMinutes(minutes);
-    circle.setLatLng(state.selectedRoute.o);
-    circle.setRadius(radiusKm * 1000);
+    circle.setLatLngs(buildGeodesicRing(state.selectedRoute.o, radiusKm));
     circle.bringToBack();
+    updateBadgeVisibility(radiusKm);
   }
 
   // Fits the camera to the selected flight path *and* the full radar-circle
@@ -373,19 +501,12 @@
   function drawRoutePreview(route) {
     if (!map) return;
     routeLayerGroup.clearLayers();
-    recommendationLayerGroup.clearLayers();
+    ensureAirportBadges(); // built once; every later call is a cheap no-op
+    // updateRadarCircle() re-derives badge visibility for every airport from
+    // scratch each call (radius reachability + hiding the active route's own
+    // destination, which gets its own bright marker below), so no separate
+    // show/hide bookkeeping is needed here.
     updateRadarCircle();
-
-    // Recommended nearby/world airports as clickable IATA badges; the
-    // active route's own destination is drawn separately as the bright
-    // highlighted marker below.
-    const seenDest = new Set();
-    ROUTES.forEach((r) => {
-      if (seenDest.has(r.dest) || (r.dest === route.dest && r.origin === route.origin)) return;
-      seenDest.add(r.dest);
-      const marker = L.marker(r.d, { icon: airportBadgeIcon(r.dest), interactive: true }).addTo(recommendationLayerGroup);
-      marker.on('click', () => selectRoute(r));
-    });
 
     const path = buildFlightPath(route.o, route.d);
     state.currentArc = path;
