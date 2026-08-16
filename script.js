@@ -85,6 +85,8 @@
   const state = {
     selectedRoute: ROUTES[1],
     selectedSeat: null,
+    selectedPurpose: 'focus',
+    focusMinutes: 30, // user-set session length, independent of the route's real-world duration
     occupiedSeats: new Set(),
     currentArc: null,
     stats: loadStats(),
@@ -95,8 +97,16 @@
       pausedAccum: 0,       // total ms already spent paused
       pauseStartedAt: null, // performance.now() when the current pause began
     },
-    audio: { ctx: null, noiseNodes: null, noiseOn: false, volume: 0.35 },
+    audio: { ctx: null, volume: 0.35, activeKind: null },
   };
+
+  const FOCUS_TAGS = [
+    { id: 'focus', label: 'Focus', icon: 'target' },
+    { id: 'work', label: 'Work', icon: 'briefcase' },
+    { id: 'meditate', label: 'Meditate', icon: 'flower-2' },
+    { id: 'read', label: 'Read', icon: 'book-open' },
+    { id: 'exercise', label: 'Exercise', icon: 'dumbbell' },
+  ];
   let ticketMeta = { flightNo: randomFlightNo() };
 
   function loadStats() {
@@ -141,6 +151,10 @@
     return `${Math.floor(totalMin / 60)}h ${totalMin % 60}m`;
   }
   function fmtKm(km) { return Math.round(km).toLocaleString('en-US'); }
+  function fmtSpeedMultiplier(routeMinutes, focusMinutes) {
+    const mult = routeMinutes / focusMinutes;
+    return mult >= 10 ? `${Math.round(mult)}x` : `${mult.toFixed(1)}x`;
+  }
   function todayLabel() {
     const d = new Date();
     return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
@@ -311,7 +325,6 @@
     renderRouteCarousel();
     updateExploreSummary();
     drawRoutePreview(route);
-    syncRulerToRoute(route);
   }
 
   function renderRouteCarousel() {
@@ -324,6 +337,7 @@
       node.querySelector('.rc-dest').textContent = route.dest;
       node.querySelector('.route-chip-cities').textContent = `${route.originCity} → ${route.destCity}`;
       node.querySelector('.rc-duration').textContent = fmtMinutes(route.minutes);
+      node.querySelector('.rc-speed').textContent = fmtSpeedMultiplier(route.minutes, state.focusMinutes);
       if (isSameRoute(route, state.selectedRoute)) node.classList.add('selected');
       node.addEventListener('click', () => selectRoute(route));
       carousel.appendChild(node);
@@ -334,19 +348,28 @@
   function updateExploreSummary() {
     const route = state.selectedRoute;
     $('#ecs-codes').innerHTML = `${route.origin} <i data-lucide="plane" class="w-3.5 h-3.5 inline text-cyan"></i> ${route.dest}`;
-    $('#ecs-meta').textContent = `${fmtMinutes(route.minutes)} · ${fmtKm(route.km)} km`;
+    $('#ecs-meta').textContent = `${fmtMinutes(state.focusMinutes)} session · ${fmtKm(route.km)} km · ${fmtSpeedMultiplier(route.minutes, state.focusMinutes)} speed`;
     refreshIcons();
   }
 
   /* ---------------------------------------------------------
-     Duration ruler (horizontal scroll picker)
+     Focus duration ruler (horizontal scroll picker, 30m – 14h)
+     Independent of the selected route: the route only supplies the
+     visual path/flavor, while this ruler is the actual session timer.
   --------------------------------------------------------- */
-  const RULER_MIN = 10, RULER_MAX = 180, RULER_STEP = 10;
+  function buildRulerTickValues() {
+    const values = [];
+    for (let m = 30; m <= 120; m += 10) values.push(m);   // 30m .. 2h, fine-grained
+    for (let m = 150; m <= 240; m += 30) values.push(m);  // 2h .. 4h
+    for (let m = 300; m <= 840; m += 60) values.push(m);  // 4h .. 14h
+    return values;
+  }
+  const RULER_VALUES = buildRulerTickValues();
 
   function renderDurationRuler() {
     const track = $('#duration-ruler-track');
     track.innerHTML = '';
-    for (let m = RULER_MIN; m <= RULER_MAX; m += RULER_STEP) {
+    RULER_VALUES.forEach((m) => {
       const tick = document.createElement('div');
       tick.className = 'ruler-tick';
       tick.dataset.minutes = String(m);
@@ -361,7 +384,7 @@
         tick.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
       });
       track.appendChild(tick);
-    }
+    });
   }
 
   function getNearestRulerTick() {
@@ -384,30 +407,13 @@
     $('#ruler-readout').textContent = fmtMinutes(parseInt(tickEl.dataset.minutes, 10));
   }
 
-  function commitRulerSelection(tickEl) {
+  function commitFocusMinutes(tickEl) {
     if (!tickEl) return;
     const minutes = parseInt(tickEl.dataset.minutes, 10);
-    const currentRounded = Math.round(state.selectedRoute.minutes / RULER_STEP) * RULER_STEP;
-    if (minutes === currentRounded) return;
-    const km = Math.round(minutes * 7.4);
-    const bearingDeg = Math.random() * 360;
-    const destCoord = destinationPoint(CUSTOM_HUB[0], CUSTOM_HUB[1], bearingDeg, km);
-    const route = { origin: 'ICN', dest: 'FOCUS', originCity: 'Seoul', destCity: 'Custom Focus', minutes, km, o: CUSTOM_HUB, d: destCoord, custom: true };
-    selectRoute(route);
-  }
-
-  function syncRulerToRoute(route) {
-    const readout = $('#ruler-readout');
-    if (route.minutes < RULER_MIN || route.minutes > RULER_MAX) {
-      $$('.ruler-tick').forEach((t) => t.classList.remove('active'));
-      readout.textContent = fmtMinutes(route.minutes);
-      return;
-    }
-    const rounded = Math.min(RULER_MAX, Math.max(RULER_MIN, Math.round(route.minutes / RULER_STEP) * RULER_STEP));
-    const tick = $(`.ruler-tick[data-minutes="${rounded}"]`);
-    if (!tick) return;
-    highlightRulerTick(tick);
-    tick.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    if (minutes === state.focusMinutes) return;
+    state.focusMinutes = minutes;
+    renderRouteCarousel();
+    updateExploreSummary();
   }
 
   function initDurationRuler() {
@@ -418,8 +424,12 @@
       const nearest = getNearestRulerTick();
       highlightRulerTick(nearest);
       clearTimeout(commitTimer);
-      commitTimer = setTimeout(() => commitRulerSelection(nearest), 180);
+      commitTimer = setTimeout(() => commitFocusMinutes(nearest), 180);
     }, { passive: true });
+
+    const defaultTick = $(`.ruler-tick[data-minutes="${state.focusMinutes}"]`) || $('.ruler-tick');
+    highlightRulerTick(defaultTick);
+    defaultTick.scrollIntoView({ behavior: 'auto', inline: 'center', block: 'nearest' });
   }
 
   /* ---------------------------------------------------------
@@ -497,6 +507,42 @@
     $('#seat-modal').addEventListener('click', (e) => { if (e.target === $('#seat-modal')) closeModal($('#seat-modal')); });
     $('#seat-confirm-btn').addEventListener('click', () => {
       closeModal($('#seat-modal'));
+      openFocusModal();
+    });
+  }
+
+  /* ---------------------------------------------------------
+     Focus purpose modal
+  --------------------------------------------------------- */
+  function renderFocusTags() {
+    const grid = $('#focus-tag-grid');
+    grid.innerHTML = '';
+    FOCUS_TAGS.forEach((tag) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'focus-tag-btn';
+      btn.dataset.id = tag.id;
+      if (state.selectedPurpose === tag.id) btn.classList.add('selected');
+      btn.innerHTML = `<i data-lucide="${tag.icon}"></i><span>${tag.label}</span>`;
+      btn.addEventListener('click', () => {
+        state.selectedPurpose = tag.id;
+        $$('.focus-tag-btn').forEach((b) => b.classList.toggle('selected', b.dataset.id === tag.id));
+      });
+      grid.appendChild(btn);
+    });
+    refreshIcons();
+  }
+
+  function openFocusModal() {
+    renderFocusTags();
+    openModal($('#focus-modal'));
+  }
+
+  function initFocusModal() {
+    $('#focus-modal-close').addEventListener('click', () => closeModal($('#focus-modal')));
+    $('#focus-modal').addEventListener('click', (e) => { if (e.target === $('#focus-modal')) closeModal($('#focus-modal')); });
+    $('#focus-confirm-btn').addEventListener('click', () => {
+      closeModal($('#focus-modal'));
       showBoardingPhase();
     });
   }
@@ -507,13 +553,14 @@
   function buildBoardingPassNode(route, seat) {
     const tpl = $('#boarding-pass-template');
     const node = tpl.content.firstElementChild.cloneNode(true);
+    const purposeTag = FOCUS_TAGS.find((t) => t.id === state.selectedPurpose) || FOCUS_TAGS[0];
     node.querySelector('.bp-origin-code').textContent = route.origin;
     node.querySelector('.bp-dest-code').textContent = route.dest;
     node.querySelector('.bp-origin-city').textContent = route.originCity;
     node.querySelector('.bp-dest-city').textContent = route.destCity;
     node.querySelector('.bp-flight-duration').textContent = fmtMinutes(route.minutes);
     node.querySelector('.bp-flight-distance').textContent = `${fmtKm(route.km)} km`;
-    node.querySelector('.bp-passenger').textContent = 'FOCUS TRAVELER';
+    node.querySelector('.bp-passenger').textContent = purposeTag.label.toUpperCase();
     node.querySelector('.bp-flight-no').textContent = ticketMeta.flightNo;
     node.querySelector('.bp-seat').textContent = seat;
     node.querySelector('.bp-date').textContent = todayLabel();
@@ -619,8 +666,12 @@
     $('#flight-hud').classList.remove('hidden');
     $('#hud-origin-code').textContent = route.origin;
     $('#hud-dest-code').textContent = route.dest;
+    $('#hud-speed-multiplier').querySelector('span').textContent = `${fmtSpeedMultiplier(route.minutes, state.focusMinutes)} speed`;
 
-    const totalSeconds = route.minutes * 60;
+    // The countdown always runs for the user-set focus duration, never the
+    // route's own real-world flight time -- long-haul routes are simply
+    // traversed faster so they still land exactly when the timer hits zero.
+    const totalSeconds = state.focusMinutes * 60;
     state.timer.totalSeconds = totalSeconds;
     state.timer.remainingSeconds = totalSeconds;
     state.timer.running = true;
@@ -700,9 +751,10 @@
     state.history.unshift({
       origin: route.origin,
       dest: route.dest,
-      minutes: route.minutes,
+      minutes: state.focusMinutes,
       km: route.km,
       seat: state.selectedSeat,
+      purpose: state.selectedPurpose,
       dateLabel: todayLabel(),
       timestamp: Date.now(),
     });
@@ -711,7 +763,7 @@
     playLandingChime();
 
     $('#landing-desc').textContent = `${fmtKm(route.km)} km 마일리지가 적립되었습니다.`;
-    $('#landing-stat-time').textContent = fmtMinutes(route.minutes);
+    $('#landing-stat-time').textContent = fmtMinutes(state.focusMinutes);
     $('#landing-stat-km').textContent = `${fmtKm(route.km)} km`;
     openModal($('#landing-modal'));
     launchConfetti();
@@ -723,12 +775,7 @@
     state.timer.paused = false;
     stopAnimationLoop();
     removePlaneMarker();
-    if (state.audio.noiseOn) {
-      stopCabinNoise();
-      $('#noise-power-btn').dataset.active = 'false';
-      $('#noise-power-btn').textContent = 'OFF';
-      $('#noise-toggle').dataset.active = 'false';
-    }
+    stopAmbient();
 
     $('#flight-hud').classList.add('hidden');
     if (progressPolyline) progressPolyline.setLatLngs([]);
@@ -793,11 +840,12 @@
     state.history.forEach((h) => {
       const item = document.createElement('div');
       item.className = 'history-item';
+      const purposeTag = FOCUS_TAGS.find((t) => t.id === h.purpose);
       item.innerHTML = `
         <div class="history-icon"><i data-lucide="plane" class="w-4 h-4 -rotate-45"></i></div>
         <div>
           <div class="history-route">${h.origin} → ${h.dest} ${h.seat ? `· ${h.seat}` : ''}</div>
-          <div class="history-meta">${h.dateLabel} · ${fmtMinutes(h.minutes)}</div>
+          <div class="history-meta">${h.dateLabel} · ${fmtMinutes(h.minutes)}${purposeTag ? ` · ${purposeTag.label}` : ''}</div>
         </div>
         <div class="history-km">+${fmtKm(h.km)} km</div>
       `;
@@ -823,81 +871,12 @@
   function closeModal(el) { el.classList.add('hidden'); }
 
   /* ---------------------------------------------------------
-     Web Audio: cabin white noise + landing chime
+     Web Audio: landing chime (short one-shot, unrelated to ambience)
   --------------------------------------------------------- */
   function getAudioCtx() {
     if (!state.audio.ctx) state.audio.ctx = new (window.AudioContext || window.webkitAudioContext)();
     if (state.audio.ctx.state === 'suspended') state.audio.ctx.resume();
     return state.audio.ctx;
-  }
-
-  function startCabinNoise() {
-    const ctx = getAudioCtx();
-    const bufferSize = 2 * ctx.sampleRate;
-    const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const output = noiseBuffer.getChannelData(0);
-    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
-    for (let i = 0; i < bufferSize; i++) {
-      const white = Math.random() * 2 - 1;
-      b0 = 0.99886 * b0 + white * 0.0555179;
-      b1 = 0.99332 * b1 + white * 0.0750759;
-      b2 = 0.96900 * b2 + white * 0.1538520;
-      b3 = 0.86650 * b3 + white * 0.3104856;
-      b4 = 0.55000 * b4 + white * 0.5329522;
-      b5 = -0.7616 * b5 - white * 0.0168980;
-      const pink = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
-      b6 = white * 0.115926;
-      output[i] = pink * 0.11;
-    }
-
-    const noiseSource = ctx.createBufferSource();
-    noiseSource.buffer = noiseBuffer;
-    noiseSource.loop = true;
-
-    const lowpass = ctx.createBiquadFilter();
-    lowpass.type = 'lowpass';
-    lowpass.frequency.value = 800;
-
-    const hum = ctx.createOscillator();
-    hum.type = 'sine';
-    hum.frequency.value = 82;
-    const humGain = ctx.createGain();
-    humGain.gain.value = 0.05;
-
-    const masterGain = ctx.createGain();
-    masterGain.gain.value = state.audio.volume;
-
-    noiseSource.connect(lowpass);
-    lowpass.connect(masterGain);
-    hum.connect(humGain);
-    humGain.connect(masterGain);
-    masterGain.connect(ctx.destination);
-
-    noiseSource.start();
-    hum.start();
-
-    state.audio.noiseNodes = { noiseSource, hum, masterGain };
-    state.audio.noiseOn = true;
-  }
-
-  function stopCabinNoise() {
-    if (!state.audio.noiseNodes) return;
-    const { noiseSource, hum, masterGain } = state.audio.noiseNodes;
-    const ctx = state.audio.ctx;
-    const now = ctx.currentTime;
-    masterGain.gain.cancelScheduledValues(now);
-    masterGain.gain.setValueAtTime(masterGain.gain.value, now);
-    masterGain.gain.linearRampToValueAtTime(0.0001, now + 0.4);
-    setTimeout(() => { try { noiseSource.stop(); hum.stop(); } catch (e) { /* already stopped */ } }, 450);
-    state.audio.noiseNodes = null;
-    state.audio.noiseOn = false;
-  }
-
-  function setNoiseVolume(v) {
-    state.audio.volume = v;
-    if (state.audio.noiseNodes) {
-      state.audio.noiseNodes.masterGain.gain.setTargetAtTime(v, state.audio.ctx.currentTime, 0.05);
-    }
   }
 
   function playLandingChime() {
@@ -924,13 +903,197 @@
     });
   }
 
-  function initCabinAudio() {
+  /* ---------------------------------------------------------
+     Ambient sound panel — Airplane / Raindrop / Ocean Waves / Forest.
+     Each texture is synthesized once via OfflineAudioContext, encoded
+     to a WAV Blob, and played back through a real HTML5 <audio>
+     element (looped) — no external sound files required.
+  --------------------------------------------------------- */
+  function createNoiseBuffer(ctx, duration, kind) {
+    const bufferSize = Math.ceil(ctx.sampleRate * duration);
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const output = buffer.getChannelData(0);
+    if (kind === 'white') {
+      for (let i = 0; i < bufferSize; i++) output[i] = (Math.random() * 2 - 1) * 0.3;
+      return buffer;
+    }
+    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+    for (let i = 0; i < bufferSize; i++) {
+      const white = Math.random() * 2 - 1;
+      b0 = 0.99886 * b0 + white * 0.0555179;
+      b1 = 0.99332 * b1 + white * 0.0750759;
+      b2 = 0.96900 * b2 + white * 0.1538520;
+      b3 = 0.86650 * b3 + white * 0.3104856;
+      b4 = 0.55000 * b4 + white * 0.5329522;
+      b5 = -0.7616 * b5 - white * 0.0168980;
+      const pink = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+      b6 = white * 0.115926;
+      output[i] = pink * 0.11;
+    }
+    return buffer;
+  }
+
+  const AMBIENT_KINDS = {
+    airplane: {
+      label: 'Airplane', duration: 12,
+      build(ctx, duration) {
+        const src = ctx.createBufferSource();
+        src.buffer = createNoiseBuffer(ctx, duration, 'pink');
+        const lowpass = ctx.createBiquadFilter();
+        lowpass.type = 'lowpass'; lowpass.frequency.value = 800;
+        const hum = ctx.createOscillator();
+        hum.type = 'sine'; hum.frequency.value = 82;
+        const humGain = ctx.createGain(); humGain.gain.value = 0.06;
+        const master = ctx.createGain(); master.gain.value = 1;
+        src.connect(lowpass); lowpass.connect(master);
+        hum.connect(humGain); humGain.connect(master);
+        master.connect(ctx.destination);
+        src.start(0); hum.start(0); hum.stop(duration);
+      },
+    },
+    rain: {
+      label: 'Raindrop', duration: 14,
+      build(ctx, duration) {
+        const src = ctx.createBufferSource();
+        src.buffer = createNoiseBuffer(ctx, duration, 'white');
+        const highpass = ctx.createBiquadFilter();
+        highpass.type = 'highpass'; highpass.frequency.value = 1800;
+        const bed = ctx.createGain(); bed.gain.value = 0.45;
+        src.connect(highpass); highpass.connect(bed); bed.connect(ctx.destination);
+        src.start(0);
+        for (let t = 0.05; t < duration - 0.1; t += 0.05 + Math.random() * 0.15) {
+          const dropDur = 0.05 + Math.random() * 0.05;
+          const dropSrc = ctx.createBufferSource();
+          dropSrc.buffer = createNoiseBuffer(ctx, dropDur, 'white');
+          const bp = ctx.createBiquadFilter();
+          bp.type = 'bandpass'; bp.frequency.value = 2500 + Math.random() * 2500; bp.Q.value = 3;
+          const dg = ctx.createGain();
+          dg.gain.setValueAtTime(0, t);
+          dg.gain.linearRampToValueAtTime(0.5 + Math.random() * 0.3, t + 0.005);
+          dg.gain.exponentialRampToValueAtTime(0.001, t + dropDur);
+          dropSrc.connect(bp); bp.connect(dg); dg.connect(ctx.destination);
+          dropSrc.start(t);
+        }
+      },
+    },
+    ocean: {
+      label: 'Ocean Waves', duration: 16,
+      build(ctx, duration) {
+        const src = ctx.createBufferSource();
+        src.buffer = createNoiseBuffer(ctx, duration, 'pink');
+        const lowpass = ctx.createBiquadFilter();
+        lowpass.type = 'lowpass'; lowpass.frequency.value = 500;
+        const waveGain = ctx.createGain(); waveGain.gain.value = 0.5;
+        const lfo = ctx.createOscillator();
+        lfo.type = 'sine'; lfo.frequency.value = 2 / duration; // exactly 2 cycles -> seamless loop
+        const lfoGain = ctx.createGain(); lfoGain.gain.value = 0.4;
+        lfo.connect(lfoGain); lfoGain.connect(waveGain.gain);
+        src.connect(lowpass); lowpass.connect(waveGain); waveGain.connect(ctx.destination);
+        src.start(0); lfo.start(0); lfo.stop(duration);
+      },
+    },
+    forest: {
+      label: 'Forest', duration: 14,
+      build(ctx, duration) {
+        const src = ctx.createBufferSource();
+        src.buffer = createNoiseBuffer(ctx, duration, 'pink');
+        const bandpass = ctx.createBiquadFilter();
+        bandpass.type = 'bandpass'; bandpass.frequency.value = 700; bandpass.Q.value = 0.6;
+        const bed = ctx.createGain(); bed.gain.value = 0.32;
+        src.connect(bandpass); bandpass.connect(bed); bed.connect(ctx.destination);
+        src.start(0);
+        for (let t = 0.8; t < duration - 0.5; t += 1.2 + Math.random() * 2.5) {
+          const chirpDur = 0.12 + Math.random() * 0.15;
+          const osc = ctx.createOscillator(); osc.type = 'sine';
+          const baseFreq = 1800 + Math.random() * 1800;
+          osc.frequency.setValueAtTime(baseFreq, t);
+          osc.frequency.exponentialRampToValueAtTime(baseFreq * (1.3 + Math.random() * 0.6), t + chirpDur * 0.6);
+          const cg = ctx.createGain();
+          cg.gain.setValueAtTime(0, t);
+          cg.gain.linearRampToValueAtTime(0.18, t + 0.02);
+          cg.gain.exponentialRampToValueAtTime(0.001, t + chirpDur);
+          osc.connect(cg); cg.connect(ctx.destination);
+          osc.start(t); osc.stop(t + chirpDur + 0.02);
+        }
+      },
+    },
+  };
+
+  function encodeWavMono(samples, sampleRate) {
+    const buffer = new ArrayBuffer(44 + samples.length * 2);
+    const view = new DataView(buffer);
+    const writeString = (offset, str) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); };
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + samples.length * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeString(36, 'data');
+    view.setUint32(40, samples.length * 2, true);
+    let offset = 44;
+    for (let i = 0; i < samples.length; i++, offset += 2) {
+      const s = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    }
+    return new Blob([view], { type: 'audio/wav' });
+  }
+
+  const ambientUrlCache = {};
+
+  async function getAmbientObjectUrl(kind) {
+    if (ambientUrlCache[kind]) return ambientUrlCache[kind];
+    const def = AMBIENT_KINDS[kind];
+    const sampleRate = 44100;
+    const OfflineCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    const offlineCtx = new OfflineCtx(1, Math.ceil(sampleRate * def.duration), sampleRate);
+    def.build(offlineCtx, def.duration);
+    const rendered = await offlineCtx.startRendering();
+    const blob = encodeWavMono(rendered.getChannelData(0), rendered.sampleRate);
+    const url = URL.createObjectURL(blob);
+    ambientUrlCache[kind] = url;
+    return url;
+  }
+
+  async function playAmbient(kind) {
+    const audioEl = $('#ambient-audio');
+    const topIcon = $('#noise-toggle');
+    if (state.audio.activeKind === kind) {
+      audioEl.pause();
+      state.audio.activeKind = null;
+      topIcon.dataset.active = 'false';
+      $$('.sound-option').forEach((b) => b.classList.remove('active'));
+      return;
+    }
+    $$('.sound-option').forEach((b) => b.classList.toggle('active', b.dataset.kind === kind));
+    const url = await getAmbientObjectUrl(kind);
+    audioEl.src = url;
+    audioEl.loop = true;
+    audioEl.volume = state.audio.volume;
+    try { await audioEl.play(); } catch (e) { /* blocked until a user gesture resolves it — button click already provides one */ }
+    state.audio.activeKind = kind;
+    topIcon.dataset.active = 'true';
+  }
+
+  function stopAmbient() {
+    const audioEl = $('#ambient-audio');
+    audioEl.pause();
+    state.audio.activeKind = null;
+    $('#noise-toggle').dataset.active = 'false';
+    $$('.sound-option').forEach((b) => b.classList.remove('active'));
+  }
+
+  function initAmbientSound() {
     const volumeSlider = $('#noise-volume');
-    setNoiseVolume(parseInt(volumeSlider.value, 10) / 100);
+    state.audio.volume = parseInt(volumeSlider.value, 10) / 100;
 
     const control = $('.noise-control');
     const topIcon = $('#noise-toggle');
-    const powerBtn = $('#noise-power-btn');
 
     topIcon.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -940,22 +1103,14 @@
       if (!control.contains(e.target)) control.classList.remove('open');
     });
 
-    powerBtn.addEventListener('click', () => {
-      const active = powerBtn.dataset.active === 'true';
-      if (active) {
-        stopCabinNoise();
-        powerBtn.dataset.active = 'false';
-        powerBtn.textContent = 'OFF';
-        topIcon.dataset.active = 'false';
-      } else {
-        startCabinNoise();
-        powerBtn.dataset.active = 'true';
-        powerBtn.textContent = 'ON';
-        topIcon.dataset.active = 'true';
-      }
+    $$('.sound-option').forEach((btn) => {
+      btn.addEventListener('click', () => playAmbient(btn.dataset.kind));
     });
 
-    volumeSlider.addEventListener('input', (e) => setNoiseVolume(parseInt(e.target.value, 10) / 100));
+    volumeSlider.addEventListener('input', (e) => {
+      state.audio.volume = parseInt(e.target.value, 10) / 100;
+      $('#ambient-audio').volume = state.audio.volume;
+    });
   }
 
   /* ---------------------------------------------------------
@@ -1066,12 +1221,12 @@
     renderRouteCarousel();
     updateExploreSummary();
     drawRoutePreview(state.selectedRoute);
-    syncRulerToRoute(state.selectedRoute);
 
     initSeatModal();
+    initFocusModal();
     initCustomFlightModal();
     initHistoryModal();
-    initCabinAudio();
+    initAmbientSound();
     initIFE();
     initFlightControls();
     initMapStyleToggle();

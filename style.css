@@ -124,8 +124,8 @@ body { background: var(--bg-deep); }
 .noise-popover {
   position: absolute;
   top: 46px; right: 0;
-  width: 160px;
-  padding: 12px 14px;
+  width: 236px;
+  padding: 14px;
   border-radius: 10px;
   background: var(--surface);
   border: 1px solid rgba(255,255,255,0.14);
@@ -133,6 +133,41 @@ body { background: var(--bg-deep); }
   transform: translateY(-4px);
   pointer-events: none;
   transition: opacity .15s ease, transform .15s ease;
+}
+.sound-panel-title {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(226,225,240,0.45);
+  margin-bottom: 10px;
+}
+.sound-option-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.sound-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 6px;
+  border-radius: 8px;
+  background: var(--bg-deep);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: rgba(226,225,240,0.65);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.sound-option:hover { border-color: rgba(16,185,129,0.5); color: #fff; }
+.sound-option.active {
+  background: rgba(16,185,129,0.14);
+  border-color: var(--neon);
+  color: var(--neon);
 }
 .noise-control.open .noise-popover {
   opacity: 1;
@@ -227,6 +262,15 @@ body { background: var(--bg-deep); }
   margin-bottom: 16px;
   padding-bottom: 14px;
   border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.duration-ruler-label {
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(226,225,240,0.4);
+  margin-bottom: 4px;
 }
 .duration-ruler-readout {
   text-align: center;
@@ -355,6 +399,7 @@ body { background: var(--bg-deep); }
 }
 .route-chip-plane-icon { color: var(--cyan); flex-shrink: 0; }
 .route-chip-cities { font-size: 11px; color: rgba(226,225,240,0.5); margin-bottom: 9px; }
+.route-chip-meta-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .route-chip-duration {
   display: inline-flex;
   align-items: center;
@@ -368,6 +413,20 @@ body { background: var(--bg-deep); }
   border-radius: 6px;
   padding: 3px 9px;
 }
+.route-chip-speed {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 10.5px;
+  color: rgba(226,225,240,0.55);
+  background: var(--bg-deep);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 6px;
+  padding: 3px 8px;
+}
+.route-chip-speed i { color: var(--cyan); }
 
 .explore-cta-row {
   display: flex;
@@ -604,6 +663,37 @@ body { background: var(--bg-deep); }
 .seat-selected-label strong { color: var(--neon); font-family: 'JetBrains Mono', monospace; font-size: 14px; }
 
 /* =========================================================
+   Focus purpose modal
+   ========================================================= */
+.focus-tag-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.focus-tag-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 10px;
+  border-radius: 12px;
+  background: var(--bg-deep);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: rgba(226,225,240,0.7);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.focus-tag-btn i { width: 22px; height: 22px; }
+.focus-tag-btn:hover { border-color: rgba(16,185,129,0.5); color: #fff; }
+.focus-tag-btn.selected {
+  background: rgba(16,185,129,0.14);
+  border-color: var(--neon);
+  color: var(--neon);
+}
+
+/* =========================================================
    In-Flight Entertainment (YouTube)
    ========================================================= */
 .ife-load-btn {
@@ -677,6 +767,17 @@ body { background: var(--bg-deep); }
   margin-bottom: 10px;
 }
 .hud-timer.is-paused { color: rgba(255,255,255,0.4); }
+.hud-speed-multiplier {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--cyan);
+  margin-bottom: 10px;
+}
+.hud-speed-multiplier i { color: var(--neon); }
 .hud-progress-track { height: 5px; border-radius: 999px; background: rgba(255,255,255,0.1); overflow: hidden; }
 .hud-progress-fill {
   height: 100%;
