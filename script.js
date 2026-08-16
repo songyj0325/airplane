@@ -234,7 +234,7 @@
     focusMinutes: 30, // user-set session length, independent of the route's real-world duration
     occupiedSeats: new Set(),
     currentArc: null,
-    stats: loadStats(),
+    stats: { totalSeconds: 0, totalKm: 0, flights: 0 }, // recomputed from history by updateStatsSummary() on init
     history: loadHistory(),
     timer: {
       running: false, paused: false, totalSeconds: 0, remainingSeconds: 0, intervalId: null,
@@ -255,15 +255,6 @@
   ];
   let ticketMeta = { flightNo: randomFlightNo() };
 
-  function loadStats() {
-    try {
-      const raw = JSON.parse(localStorage.getItem(STORAGE_STATS));
-      if (raw && typeof raw === 'object') {
-        return { totalSeconds: raw.totalSeconds || 0, totalKm: raw.totalKm || 0, flights: raw.flights || 0 };
-      }
-    } catch (e) { /* ignore */ }
-    return { totalSeconds: 0, totalKm: 0, flights: 0 };
-  }
   function loadHistory() {
     try {
       const raw = JSON.parse(localStorage.getItem(STORAGE_HISTORY));
@@ -314,6 +305,23 @@
     $('#stat-total-time').textContent = fmtHoursTotal(state.stats.totalSeconds);
     $('#stat-mileage').textContent = `${fmtKm(state.stats.totalKm)} km`;
     $('#stat-flights').textContent = state.stats.flights;
+  }
+
+  // Derives the header summary bar directly from state.history (the
+  // authoritative record) instead of tracking separate running totals --
+  // that way a single delete or a full clear can never leave the top bar
+  // out of sync with what's actually left in the history list. Recomputing
+  // is O(history length, capped at 50) so it's cheap to call on every
+  // history mutation.
+  function updateStatsSummary() {
+    state.stats = state.history.reduce((acc, h) => {
+      acc.totalSeconds += h.minutes * 60;
+      acc.totalKm += h.km;
+      acc.flights += 1;
+      return acc;
+    }, { totalSeconds: 0, totalKm: 0, flights: 0 });
+    persistStats();
+    renderStats();
   }
 
   /* ---------------------------------------------------------
@@ -1029,12 +1037,6 @@
     updatePlanePosition(1, true);
 
     const route = state.selectedRoute;
-    state.stats.totalSeconds += state.timer.totalSeconds;
-    state.stats.totalKm += route.km;
-    state.stats.flights += 1;
-    persistStats();
-    renderStats();
-
     state.history.unshift({
       origin: route.origin,
       dest: route.dest,
@@ -1046,6 +1048,7 @@
       timestamp: Date.now(),
     });
     persistHistory();
+    updateStatsSummary();
 
     playLandingChime();
 
@@ -1103,6 +1106,8 @@
   function renderHistory() {
     const list = $('#history-list');
     const empty = $('#history-empty');
+    const clearAllBtn = $('#history-clear-all-btn');
+    if (clearAllBtn) clearAllBtn.disabled = state.history.length === 0;
     list.innerHTML = '';
     if (state.history.length === 0) {
       empty.classList.remove('hidden');
@@ -1136,6 +1141,14 @@
     state.history = state.history.filter((h) => h.timestamp !== timestamp);
     persistHistory();
     renderHistory();
+    updateStatsSummary();
+  }
+
+  function clearAllHistory() {
+    state.history = [];
+    persistHistory();
+    renderHistory();
+    updateStatsSummary();
   }
 
   function initHistoryModal() {
@@ -1146,6 +1159,18 @@
     });
     $('#history-modal-close').addEventListener('click', () => closeModal(modal));
     modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(modal); });
+
+    const clearModal = $('#history-clear-modal');
+    $('#history-clear-all-btn').addEventListener('click', () => {
+      if (state.history.length === 0) return;
+      openModal(clearModal);
+    });
+    $('#history-clear-cancel-btn').addEventListener('click', () => closeModal(clearModal));
+    $('#history-clear-confirm-btn').addEventListener('click', () => {
+      clearAllHistory();
+      closeModal(clearModal);
+    });
+    clearModal.addEventListener('click', (e) => { if (e.target === clearModal) closeModal(clearModal); });
   }
 
   /* ---------------------------------------------------------
@@ -1514,7 +1539,11 @@
     } catch (e) {
       console.error('Map init failed:', e);
     }
-    renderStats();
+    // Recompute (rather than just render) on load so any stats totals
+    // persisted before this sync fix -- e.g. left stale by a delete that
+    // predates updateStatsSummary() -- self-heal against the history that's
+    // actually still there.
+    updateStatsSummary();
 
     state.occupiedSeats = generateOccupiedSeats();
     initDurationRuler();

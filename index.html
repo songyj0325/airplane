@@ -374,7 +374,12 @@
   <div class="modal-box modal-box-wide">
     <div class="modal-header">
       <h3 class="modal-title"><i data-lucide="scroll-text" class="w-5 h-5 text-neon"></i> Flight History</h3>
-      <button id="history-modal-close" class="modal-close"><i data-lucide="x" class="w-5 h-5"></i></button>
+      <div class="flex items-center gap-2">
+        <button id="history-clear-all-btn" type="button" class="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-white/10 text-white/45 hover:text-red-400 hover:border-red-400/50 transition-colors disabled:opacity-30 disabled:pointer-events-none">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Clear All
+        </button>
+        <button id="history-modal-close" class="modal-close"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
     </div>
     <div class="modal-body">
       <div id="history-list" class="history-list"></div>
@@ -424,6 +429,25 @@
       </button>
       <button id="abort-confirm-btn" class="control-btn control-btn-danger flex-1 justify-center">
         <span>착륙 포기</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Clear All History Confirm Modal -->
+<div id="history-clear-modal" class="modal-overlay hidden">
+  <div class="modal-box abort-box">
+    <div class="landing-icon-wrap abort-icon-wrap">
+      <i data-lucide="triangle-alert" class="w-8 h-8 text-amber-400"></i>
+    </div>
+    <h3 class="landing-title">모든 기록을 삭제하시겠습니까?</h3>
+    <p class="landing-desc">누적 통계와 마일리지가 모두 초기화되며, 이 작업은 되돌릴 수 없습니다.</p>
+    <div class="flex gap-3 mt-6">
+      <button id="history-clear-cancel-btn" class="control-btn control-btn-primary flex-1 justify-center">
+        <span>취소</span>
+      </button>
+      <button id="history-clear-confirm-btn" class="control-btn control-btn-danger flex-1 justify-center">
+        <span>전체 삭제</span>
       </button>
     </div>
   </div>
