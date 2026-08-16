@@ -124,7 +124,7 @@
   // other airport in AIRPORTS becomes a reachable destination from it.
   const DEPARTURE_CODES = [
     'ICN', 'GMP', 'PUS', 'CJU', 'HND', 'NRT', 'KIX', 'PEK', 'PVG', 'TPE',
-    'HKG', 'SIN', 'BKK', 'JFK', 'LAX', 'SFO', 'LHR', 'CDG', 'FRA', 'DXB', 'SYD',
+    'HKG', 'SIN', 'BKK', 'JFK', 'LAX', 'SFO', 'LHR', 'CDG', 'FRA', 'DXB', 'SYD', 'AKL',
   ];
 
   // Builds the full route set from a given origin airport to every other
@@ -404,10 +404,11 @@
 
   // Only expose badges for airports that actually fall within the current
   // focus-duration-derived reachable radius -- the map should "unlock" more
-  // destinations as the ruler grows (from a couple nearby at 30m to most of
-  // the world at 14h), instead of showing all 150+ codes at once regardless
-  // of the selected duration. The current origin's own badge is always
-  // hidden (it gets its own marker via drawRoutePreview instead).
+  // destinations as the ruler grows (from a couple nearby at 30m to the
+  // world's longest real nonstop distances by 19h), instead of showing all
+  // 150+ codes at once regardless of the selected duration. The current
+  // origin's own badge is always hidden (it gets its own marker via
+  // drawRoutePreview instead).
   function updateBadgeVisibility(radiusKm) {
     if (airportMarkerCache.size === 0) return;
     setBadgeHidden(state.originCode, true);
@@ -743,13 +744,19 @@
   }
 
   /* ---------------------------------------------------------
-     Focus duration ruler (horizontal scroll picker, 30m – 14h)
+     Focus duration ruler (horizontal scroll picker, 30m – 19h)
      Independent of the selected route: the route only supplies the
      visual path/flavor, while this ruler is the actual session timer.
+     19h (1140m) was chosen so the radar radius at max duration --
+     reachableKmForMinutes(1140) ~= 15,800km -- comfortably covers the
+     world's longest real nonstop routes (e.g. SIN-EWR ~15,335km, needing
+     ~18.4h; AKL-DOH ~14,534km, needing ~17.5h), so they surface as the
+     ruler approaches its new ceiling instead of staying permanently
+     out of reach.
   --------------------------------------------------------- */
   function buildRulerTickValues() {
     const values = [];
-    for (let m = 10; m <= 840; m += 10) values.push(m); // 10m .. 14h, uniform 10-minute steps
+    for (let m = 10; m <= 1140; m += 10) values.push(m); // 10m .. 19h, uniform 10-minute steps
     return values;
   }
   const RULER_VALUES = buildRulerTickValues();
@@ -1108,8 +1115,11 @@
     const initialBearing = bearingBetween(startPos, pointAtProgress(state.currentArc, 0.01));
     createPlaneMarker(startPos, initialBearing);
 
-    playTakeoffChime();
-    setTimeout(announceDeparture, 1300);
+    // A single cabin chime, then the captain's welcome PA -- previously this
+    // also fired playTakeoffChime() immediately AND a second ding-dong 1.3s
+    // later via announceDeparture(), which is what actually produced the
+    // "ding-dong ding-dong" double-chime at every departure.
+    announceDeparture();
     scheduleNextPeriodicChime();
 
     updateHudText();
@@ -1364,14 +1374,6 @@
     });
   }
 
-  // Classic two-tone "bing-bong" cabin chime, played on departure.
-  function playTakeoffChime() {
-    playChimeSequence([
-      { freq: 659.25, start: 0.0, dur: 0.5 },  // E5
-      { freq: 523.25, start: 0.28, dur: 0.7 }, // C5
-    ]);
-  }
-
   // Fuller three-tone arrival chime, played on landing.
   function playLandingChime() {
     playChimeSequence([
@@ -1381,17 +1383,26 @@
     ]);
   }
 
-  // Soft two-tone "ding~dong" cabin bell, modeled on a real cabin PA chime:
-  // one unhurried "ding" (C5) that's still ringing when the lower "dong"
-  // (G4) enters underneath it, then a slow 1.2s decay -- not a fast
-  // "ding-ding-dong-dong" repeat. Gentler/quieter than the takeoff/landing
-  // chimes above; used to precede PA announcements and for the periodic
-  // in-flight cabin bell.
-  function playDingDong() {
+  // Single canonical cabin chime -- the same gentle two-tone "ding~dong" a
+  // real cabin PA plays exactly once before an announcement: "ding" (C5)
+  // rings for 0.5s, then "dong" (G4) enters right as it fades and lingers
+  // for 1.2s with its own gain fadeout. Used to precede PA announcements
+  // and for the periodic in-flight cabin bell.
+  //
+  // isChimePlaying is a hard debounce: a stray double-call (e.g. two events
+  // firing close together) is dropped rather than layering a second
+  // "ding~dong" on top of the first and sounding like "ding-dong ding-dong".
+  let isChimePlaying = false;
+  const CABIN_CHIME_TOTAL_DURATION_MS = 1750; // 0.5s ding + 1.2s dong + a small settle buffer
+
+  function playCabinChime() {
+    if (isChimePlaying) return;
+    isChimePlaying = true;
     playChimeSequence([
-      { freq: 523.25, start: 0.0, dur: 0.6 },  // C5 -- "ding"
-      { freq: 392.00, start: 0.55, dur: 1.2 }, // G4 -- "dong", slow gentle decay
+      { freq: 523.25, start: 0.0, dur: 0.5 }, // C5 -- "ding"
+      { freq: 392.00, start: 0.5, dur: 1.2 }, // G4 -- "dong", slow gentle decay
     ], 0.2);
+    setTimeout(() => { isChimePlaying = false; }, CABIN_CHIME_TOTAL_DURATION_MS);
   }
 
   /* ---------------------------------------------------------
@@ -1457,10 +1468,10 @@
 
   function announceDeparture() {
     const route = state.selectedRoute;
-    playDingDong();
+    playCabinChime();
     setTimeout(() => {
       speakAnnouncement(`Welcome aboard PomoFlight. We are currently flying to our destination, ${route.destCity}. Please sit back, relax, and enjoy your focus session.`);
-    }, 1400);
+    }, CABIN_CHIME_TOTAL_DURATION_MS);
   }
 
   function announceArrival(route) {
@@ -1483,7 +1494,7 @@
     const gapS = Math.min(MAX_GAP_S, remaining - SAFETY_MARGIN_S);
     const delayMs = (MIN_GAP_S + Math.random() * Math.max(0, gapS - MIN_GAP_S)) * 1000;
     periodicChimeTimeoutId = setTimeout(() => {
-      if (state.timer.running && !state.timer.paused) playDingDong();
+      if (state.timer.running && !state.timer.paused) playCabinChime();
       scheduleNextPeriodicChime();
     }, delayMs);
   }
