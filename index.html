@@ -2,20 +2,22 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>PomoFlight — Premium Pomodoro Flight Timer</title>
-<meta name="description" content="비행기 컨셉의 프리미엄 포모도로 타이머">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>PomoFlight 3D — Satellite Flight Focus Timer</title>
+<meta name="description" content="위성 지도 기반 3D 비행 포모도로 타이머">
 
 <!-- Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
 <!-- Tailwind CSS -->
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
   tailwind.config = {
-    darkMode: 'class',
     theme: {
       extend: {
         colors: {
@@ -27,7 +29,7 @@
           cyan: '#00F0FF',
         },
         fontFamily: {
-          sans: ['"Plus Jakarta Sans"', 'Inter', 'sans-serif'],
+          sans: ['"Plus Jakarta Sans"', 'sans-serif'],
           mono: ['"JetBrains Mono"', 'monospace'],
         },
         boxShadow: {
@@ -40,218 +42,160 @@
 </script>
 
 <!-- Lucide Icons -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 
 <link rel="stylesheet" href="style.css">
 </head>
-<body class="min-h-screen bg-bgdeep text-slate-100 font-sans antialiased overflow-x-hidden">
+<body class="h-screen w-screen overflow-hidden bg-bgdeep text-slate-100 font-sans antialiased">
 
-<!-- Ambient background -->
-<div class="fixed inset-0 -z-10 bg-gradient-radial">
-  <div class="stars"></div>
-  <div class="aurora aurora-1"></div>
-  <div class="aurora aurora-2"></div>
+<!-- ===================== MAP LAYER ===================== -->
+<div id="map"></div>
+<div class="map-vignette-top"></div>
+<div class="map-vignette-bottom"></div>
+
+<!-- Fixed center plane marker (explore/boarding/flight phases) -->
+<div id="fixed-plane" class="fixed-plane hidden">
+  <div class="fixed-plane-pulse"></div>
+  <div class="fixed-plane-icon"><i data-lucide="navigation" class="w-6 h-6"></i></div>
 </div>
 
-<!-- ===================== HEADER / DASHBOARD ===================== -->
-<header id="app-header" class="relative z-20">
-  <div class="max-w-6xl mx-auto px-5 sm:px-8 pt-8 pb-4">
-    <div class="flex items-center justify-between mb-8">
-      <div class="flex items-center gap-3">
-        <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-neon to-fuch-600 flex items-center justify-center shadow-neon">
-          <i data-lucide="plane" class="w-6 h-6 text-white -rotate-45"></i>
-        </div>
-        <div>
-          <h1 class="text-xl sm:text-2xl font-extrabold tracking-tight leading-none">Pomo<span class="text-neon">Flight</span></h1>
-          <p class="text-[11px] sm:text-xs text-slate-400 tracking-widest uppercase mt-0.5">Premium Focus Airlines</p>
-        </div>
-      </div>
-      <button id="history-toggle-btn" class="flex items-center gap-2 px-3.5 py-2 rounded-full bg-white/5 border border-white/10 hover:border-cyan/50 hover:bg-white/10 transition-all text-xs sm:text-sm font-medium">
-        <i data-lucide="scroll-text" class="w-4 h-4 text-cyan"></i>
-        <span class="hidden sm:inline">Flight Log</span>
-      </button>
+<!-- ===================== TOP BAR ===================== -->
+<header id="top-bar" class="hud-layer top-bar">
+  <div class="flex items-center gap-2.5">
+    <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-neon to-fuchsia-700 flex items-center justify-center shadow-neon shrink-0">
+      <i data-lucide="plane" class="w-5 h-5 text-white -rotate-45"></i>
     </div>
+    <div class="leading-none hidden xs:block">
+      <h1 class="text-base sm:text-lg font-extrabold tracking-tight">Pomo<span class="text-neon">Flight</span> <span class="text-cyan text-xs align-top font-bold">3D</span></h1>
+      <p class="text-[9.5px] text-slate-400 tracking-widest uppercase mt-0.5">Satellite Focus Airlines</p>
+    </div>
+  </div>
 
-    <!-- Stat strip -->
-    <div class="grid grid-cols-3 gap-3 sm:gap-4">
-      <div class="stat-card">
-        <i data-lucide="timer" class="w-4 h-4 text-neon mb-2"></i>
-        <div class="stat-value" id="stat-total-time">0h 0m</div>
-        <div class="stat-label">Total Flight Time</div>
-      </div>
-      <div class="stat-card">
-        <i data-lucide="gauge-circle" class="w-4 h-4 text-cyan mb-2"></i>
-        <div class="stat-value" id="stat-mileage">0 <span class="text-xs sm:text-sm font-semibold text-slate-400">km</span></div>
-        <div class="stat-label">Mileage Earned</div>
-      </div>
-      <div class="stat-card">
-        <i data-lucide="badge-check" class="w-4 h-4 text-amber-400 mb-2"></i>
-        <div class="stat-value" id="stat-flights">0</div>
-        <div class="stat-label">Completed Flights</div>
+  <div class="topbar-stats">
+    <span class="topbar-stat"><i data-lucide="timer" class="w-3.5 h-3.5 text-neon"></i><span id="stat-total-time">0h 0m</span></span>
+    <span class="topbar-stat"><i data-lucide="gauge-circle" class="w-3.5 h-3.5 text-cyan"></i><span id="stat-mileage">0 km</span></span>
+    <span class="topbar-stat"><i data-lucide="badge-check" class="w-3.5 h-3.5 text-amber-400"></i><span id="stat-flights">0</span></span>
+  </div>
+
+  <div class="flex items-center gap-2">
+    <button id="map-style-toggle" class="icon-pill" title="지도 스타일 전환">
+      <i data-lucide="satellite" class="w-4 h-4"></i>
+    </button>
+    <div class="noise-control">
+      <button id="noise-toggle" class="icon-pill" title="기내 백색소음" data-active="false">
+        <i data-lucide="volume-2" class="w-4 h-4"></i>
+      </button>
+      <div class="noise-popover" id="noise-popover">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[10px] text-slate-400 tracking-wide uppercase">Cabin Noise</span>
+          <button id="noise-power-btn" class="toggle-pill" data-active="false" type="button">OFF</button>
+        </div>
+        <input id="noise-volume" type="range" min="0" max="100" value="35" class="range-slider">
       </div>
     </div>
+    <button id="history-toggle-btn" class="icon-pill" title="Flight Log">
+      <i data-lucide="scroll-text" class="w-4 h-4"></i>
+    </button>
   </div>
 </header>
 
-<!-- ===================== MAIN ===================== -->
-<main class="relative z-10 max-w-6xl mx-auto px-5 sm:px-8 pb-24">
-
-  <!-- ---------- SELECTION VIEW ---------- -->
-  <section id="selection-view">
-    <div class="flex items-center justify-between mt-4 mb-4">
-      <h2 class="text-sm font-semibold tracking-widest text-slate-400 uppercase flex items-center gap-2">
-        <i data-lucide="route" class="w-4 h-4"></i> Choose Your Route
-      </h2>
-      <button id="custom-flight-btn" class="flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-cyan hover:text-white transition-colors">
-        <i data-lucide="plus-circle" class="w-4 h-4"></i> Custom Flight
+<!-- ===================== EXPLORE PHASE (bottom carousel) ===================== -->
+<section id="explore-panel" class="hud-layer explore-panel">
+  <div class="explore-panel-inner">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="explore-title"><i data-lucide="route" class="w-3.5 h-3.5"></i> Choose Your Route</h2>
+      <button id="custom-flight-btn" class="explore-custom-btn">
+        <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> Custom
       </button>
     </div>
 
-    <div id="route-grid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-      <!-- route cards injected by JS -->
+    <div id="route-carousel" class="route-carousel"><!-- route chips injected --></div>
+
+    <div class="explore-cta-row">
+      <div class="explore-cta-summary">
+        <span class="ecs-codes" id="ecs-codes">PUS <i data-lucide="plane" class="w-3.5 h-3.5 inline -rotate-0 text-cyan"></i> OKA</span>
+        <span class="ecs-meta" id="ecs-meta">1h 31m · 1,004 km</span>
+      </div>
+      <button id="select-seat-btn" class="start-btn">
+        <i data-lucide="armchair" class="w-5 h-5"></i>
+        <span>좌석 선택</span>
+      </button>
     </div>
+  </div>
+</section>
 
-    <!-- Selected Boarding Pass Preview -->
-    <div class="mt-10">
-      <h2 class="text-sm font-semibold tracking-widest text-slate-400 uppercase flex items-center gap-2 mb-4">
-        <i data-lucide="ticket" class="w-4 h-4"></i> Your Boarding Pass
-      </h2>
-      <div id="ticket-wrap" class="flex justify-center">
-        <!-- boarding pass injected by JS (template below) -->
-      </div>
-
-      <div class="flex justify-center mt-8">
-        <button id="start-flight-btn" class="start-btn group">
-          <i data-lucide="plane-takeoff" class="w-5 h-5 transition-transform group-hover:translate-x-1"></i>
-          <span>Start Flight</span>
-        </button>
-      </div>
+<!-- ===================== BOARDING PHASE (ticket overlay) ===================== -->
+<section id="boarding-panel" class="hud-layer boarding-panel hidden">
+  <div class="boarding-panel-inner">
+    <div id="boarding-ticket-wrap"></div>
+    <div class="boarding-actions">
+      <button id="boarding-back-btn" class="control-btn control-btn-primary">
+        <i data-lucide="chevron-left" class="w-4 h-4"></i>
+        <span>Back</span>
+      </button>
+      <button id="start-boarding-btn" class="start-btn">
+        <i data-lucide="plane-takeoff" class="w-5 h-5"></i>
+        <span>비행 시작 (Boarding)</span>
+      </button>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- ---------- FOCUS / FLIGHT MODE VIEW ---------- -->
-  <section id="focus-view" class="hidden">
-    <div class="focus-grid">
+<!-- ===================== FLIGHT PHASE (HUD) ===================== -->
+<div id="flight-hud" class="hidden">
+  <!-- top-right: distance + speed -->
+  <div class="hud-layer hud-topright">
+    <div class="hud-readout-label">Distance Remaining</div>
+    <div class="hud-readout-value"><span id="hud-distance">1,004</span> <span class="hud-unit">km</span></div>
+    <div class="hud-speed"><i data-lucide="gauge" class="w-3.5 h-3.5"></i> <span id="hud-speed">0</span> km/h</div>
+  </div>
 
-      <!-- Window View -->
-      <div class="window-panel">
-        <div class="window-frame">
-          <div class="window-sky" id="window-sky">
-            <div class="sun-glow"></div>
-            <div class="cloud-layer" id="cloud-layer"></div>
-            <div class="wing"></div>
-          </div>
-          <div class="window-rivets"></div>
-          <div class="window-shine"></div>
-        </div>
-        <div class="window-caption">
-          <i data-lucide="cloud" class="w-3.5 h-3.5"></i>
-          <span id="altitude-readout">ALT 11,000m · Cruising</span>
-        </div>
-      </div>
-
-      <!-- Flight Console -->
-      <div class="console-panel">
-        <div id="focus-ticket-wrap" class="mb-6"></div>
-
-        <!-- Progress route bar -->
-        <div class="route-progress">
-          <div class="route-progress-endpoints">
-            <div class="rp-airport">
-              <span class="rp-code" id="rp-origin-code">ICN</span>
-              <span class="rp-label">Departure</span>
-            </div>
-            <div class="rp-airport text-right">
-              <span class="rp-code" id="rp-dest-code">HND</span>
-              <span class="rp-label">Arrival</span>
-            </div>
-          </div>
-          <div class="route-progress-track">
-            <div class="route-progress-fill" id="route-progress-fill"></div>
-            <div class="route-progress-plane" id="route-progress-plane">
-              <i data-lucide="plane" class="w-4 h-4"></i>
-            </div>
-          </div>
-          <div class="route-progress-meta">
-            <span id="progress-percent">0%</span>
-            <span id="distance-remaining">-- km remaining</span>
-          </div>
-        </div>
-
-        <!-- Timer -->
-        <div class="timer-display-wrap">
-          <div class="timer-display" id="timer-display">25:00</div>
-          <div class="timer-sub" id="timer-status">On schedule &middot; Cruising altitude</div>
-        </div>
-
-        <!-- Timer controls -->
-        <div class="flex items-center justify-center gap-3 mt-6">
-          <button id="pause-btn" class="control-btn control-btn-primary">
-            <i data-lucide="pause" class="w-5 h-5" id="pause-icon"></i>
-            <i data-lucide="play" class="w-5 h-5 hidden" id="play-icon"></i>
-            <span id="pause-btn-label">Pause</span>
-          </button>
-          <button id="abort-btn" class="control-btn control-btn-danger">
-            <i data-lucide="octagon-x" class="w-5 h-5"></i>
-            <span>Abort Landing</span>
-          </button>
-        </div>
-
-        <!-- Cabin Audio System -->
-        <div class="cabin-panel">
-          <div class="cabin-panel-header">
-            <i data-lucide="volume-2" class="w-4 h-4 text-cyan"></i>
-            <span>Cabin White Noise</span>
-            <button id="noise-toggle" class="ml-auto toggle-pill" data-active="false">OFF</button>
-          </div>
-          <input id="noise-volume" type="range" min="0" max="100" value="35" class="range-slider">
-        </div>
-
-        <!-- In-flight entertainment -->
-        <div class="cabin-panel">
-          <div class="cabin-panel-header">
-            <i data-lucide="tv" class="w-4 h-4 text-neon"></i>
-            <span>In-Flight Entertainment</span>
-            <button id="ife-toggle" class="ml-auto toggle-pill" data-active="false">CLOSED</button>
-          </div>
-          <div id="ife-body" class="hidden">
-            <div class="flex gap-2 mb-3">
-              <input id="youtube-url-input" type="text" placeholder="YouTube 링크 붙여넣기 (Lo-Fi 추천)" class="ife-input">
-              <button id="youtube-load-btn" class="ife-load-btn">
-                <i data-lucide="play" class="w-4 h-4"></i>
-              </button>
-            </div>
-            <div class="ife-screen-frame">
-              <div id="ife-screen-placeholder" class="ife-placeholder">
-                <i data-lucide="film" class="w-8 h-8 mb-2 opacity-40"></i>
-                <span>기내 모니터가 대기 중입니다</span>
-              </div>
-              <div id="ife-player-mount" class="w-full h-full hidden"></div>
-            </div>
-          </div>
-        </div>
-      </div>
+  <!-- bottom-left: timer + progress -->
+  <div class="hud-layer hud-bottomleft">
+    <div class="hud-readout-label" id="hud-timer-label">Time Remaining</div>
+    <div class="hud-timer" id="hud-timer">91:00</div>
+    <div class="hud-progress-track">
+      <div class="hud-progress-fill" id="hud-progress-fill"></div>
     </div>
-  </section>
+    <div class="hud-progress-pct"><span id="hud-progress-pct">0</span>% complete</div>
+  </div>
 
-</main>
+  <!-- bottom-center: controls -->
+  <div class="hud-layer hud-controls">
+    <button id="pause-btn" class="control-btn control-btn-primary">
+      <i data-lucide="pause" class="w-5 h-5" id="pause-icon"></i>
+      <i data-lucide="play" class="w-5 h-5 hidden" id="play-icon"></i>
+      <span id="pause-btn-label">Pause</span>
+    </button>
+    <button id="abort-btn" class="control-btn control-btn-danger">
+      <i data-lucide="octagon-x" class="w-5 h-5"></i>
+      <span>Abort</span>
+    </button>
+  </div>
+
+  <!-- top-left small route chip -->
+  <div class="hud-layer hud-topleft">
+    <span class="hud-route-code" id="hud-origin-code">PUS</span>
+    <i data-lucide="plane" class="w-3.5 h-3.5 text-cyan"></i>
+    <span class="hud-route-code" id="hud-dest-code">OKA</span>
+  </div>
+</div>
 
 <!-- ===================== TEMPLATES ===================== -->
 
-<template id="route-card-template">
-  <button class="route-card" type="button">
-    <div class="route-card-top">
-      <span class="route-card-codes">
-        <span class="rc-origin"></span>
-        <i data-lucide="plane" class="w-3.5 h-3.5 rc-plane-icon"></i>
-        <span class="rc-dest"></span>
-      </span>
-      <span class="route-card-class">FIRST</span>
+<template id="route-chip-template">
+  <button class="route-chip" type="button">
+    <div class="route-chip-top">
+      <span class="rc-origin"></span>
+      <i data-lucide="plane" class="w-3 h-3 text-cyan"></i>
+      <span class="rc-dest"></span>
     </div>
-    <div class="route-card-cities"></div>
-    <div class="route-card-meta">
-      <span class="rc-duration"><i data-lucide="clock" class="w-3.5 h-3.5"></i><span></span></span>
-      <span class="rc-distance"><i data-lucide="map-pin" class="w-3.5 h-3.5"></i><span></span></span>
+    <div class="route-chip-cities"></div>
+    <div class="route-chip-meta">
+      <span class="rc-duration"></span>
+      <span class="rc-dot">&middot;</span>
+      <span class="rc-distance"></span>
     </div>
   </button>
 </template>
@@ -337,6 +281,34 @@
 </template>
 
 <!-- ===================== MODALS ===================== -->
+
+<!-- Seat Selection Modal -->
+<div id="seat-modal" class="modal-overlay hidden">
+  <div class="modal-box seat-box">
+    <div class="modal-header">
+      <h3 class="modal-title"><i data-lucide="armchair" class="w-5 h-5 text-cyan"></i> Select Your Seat</h3>
+      <button id="seat-modal-close" class="modal-close"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="seat-legend">
+        <span class="seat-legend-item"><span class="seat-swatch seat-swatch-available"></span>Available</span>
+        <span class="seat-legend-item"><span class="seat-swatch seat-swatch-selected"></span>Selected</span>
+        <span class="seat-legend-item"><span class="seat-swatch seat-swatch-occupied"></span>Occupied</span>
+      </div>
+      <div class="cabin-plan">
+        <div class="cabin-nose"><i data-lucide="chevron-up" class="w-4 h-4"></i><span>FRONT</span></div>
+        <div id="seat-grid" class="seat-grid"></div>
+      </div>
+      <div class="seat-confirm-row">
+        <span class="seat-selected-label">Selected: <strong id="seat-selected-display">—</strong></span>
+        <button id="seat-confirm-btn" class="start-btn" disabled>
+          <i data-lucide="check" class="w-5 h-5"></i>
+          <span>좌석 확정</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Custom Flight Modal -->
 <div id="custom-flight-modal" class="modal-overlay hidden">
@@ -437,8 +409,6 @@
     </div>
   </div>
 </div>
-
-<audio id="chime-audio-fallback" class="hidden"></audio>
 
 <script src="script.js"></script>
 </body>
