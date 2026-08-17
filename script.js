@@ -419,7 +419,15 @@
   /* ---------------------------------------------------------
      Map
   --------------------------------------------------------- */
-  let map, satelliteLayer, darkLayer, osmLayer, currentMapStyle = 'satellite';
+  // CartoDB Dark Matter is the default and the guaranteed fallback landing
+  // spot (see attachTileFallback below) -- ArcGIS satellite imagery is more
+  // prone to being blocked on strict mobile/in-app-browser network
+  // policies (iOS Safari ITP, Instagram/KakaoTalk WebViews), and the old
+  // further fallback to plain OpenStreetMap was itself the bug: a bright,
+  // non-English-labeled basemap landing on exactly the devices where the
+  // satellite layer struggled most. There's no further fallback past dark
+  // now, so that can't happen again.
+  let map, satelliteLayer, darkLayer, currentMapStyle = 'dark';
   let routeLayerGroup, progressPolyline, remainderPolyline, originMarker, destMarker;
   // Recommendation markers (world airport badges) are explore-only: they're
   // removed from the map entirely during flight so Leaflet isn't repositioning
@@ -562,6 +570,10 @@
       maxNativeZoom: 17, // beyond this, Leaflet upscales the last real tile instead of requesting missing ones
       errorTileUrl: TRANSPARENT_TILE,
     });
+    // The forced default: a fixed English-labeled dark basemap, independent
+    // of device locale/theme settings, so satellite/mobile/in-app-browser
+    // quirks can never leave the user looking at a bright, foreign-labeled
+    // map -- this is the layer every fallback path below ultimately lands on.
     darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
       subdomains: 'abcd',
@@ -569,19 +581,15 @@
       maxNativeZoom: 17,
       errorTileUrl: TRANSPARENT_TILE,
     });
-    osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-      subdomains: 'abc',
-      maxZoom: 19,
-      maxNativeZoom: 19,
-      errorTileUrl: TRANSPARENT_TILE,
-    });
-    satelliteLayer.addTo(map);
+    darkLayer.addTo(map);
 
-    // If a whole layer is broadly unreachable (network/CDN blocked, not
-    // just a few missing edge tiles), cascade to the next one automatically
-    // rather than leaving the user staring at a blank/broken map: satellite
-    // -> CartoDB Dark Matter -> plain OpenStreetMap.
+    // If satellite imagery is broadly unreachable (network/CDN blocked, not
+    // just a few missing edge tiles -- more common on strict mobile/in-app
+    // browser network policies), fall back to the dark layer automatically
+    // rather than leaving the user staring at a blank/broken map. Dark has
+    // no further fallback: it's the one layer trusted to always render
+    // correctly, so the cascade stops there instead of ever reaching a
+    // bright/foreign-language basemap.
     function attachTileFallback(layer, styleWhenActive, nextStyle, errorThreshold) {
       let errorCount = 0;
       let triggered = false;
@@ -594,7 +602,6 @@
       });
     }
     attachTileFallback(satelliteLayer, 'satellite', 'dark', 8);
-    attachTileFallback(darkLayer, 'dark', 'osm', 8);
 
     routeLayerGroup = L.layerGroup().addTo(map);
     recommendationLayerGroup = L.layerGroup().addTo(map);
@@ -675,7 +682,7 @@
   }
 
   function styleLayerFor(style) {
-    return style === 'satellite' ? satelliteLayer : style === 'dark' ? darkLayer : osmLayer;
+    return style === 'satellite' ? satelliteLayer : darkLayer;
   }
 
   // Shared by the manual toggle button and the automatic tileerror fallback
@@ -687,10 +694,9 @@
     currentMapStyle = style;
     const btn = $('#map-style-toggle');
     if (btn) {
-      btn.dataset.active = style !== 'satellite' ? 'true' : 'false';
-      btn.innerHTML = style === 'satellite' ? '<i data-lucide="satellite" class="w-4 h-4"></i>'
-        : style === 'dark' ? '<i data-lucide="moon" class="w-4 h-4"></i>'
-        : '<i data-lucide="map" class="w-4 h-4"></i>';
+      btn.dataset.active = style === 'dark' ? 'true' : 'false';
+      btn.innerHTML = style === 'dark' ? '<i data-lucide="moon" class="w-4 h-4"></i>'
+        : '<i data-lucide="satellite" class="w-4 h-4"></i>';
       refreshIcons();
     }
   }
@@ -727,6 +733,7 @@
     const destSelect = $('#destination-select');
     if (destSelect) destSelect.value = route.dest;
     updateExploreSummary();
+    syncFocusDurationToRoute(route);
     drawRoutePreview(route);
   }
 
@@ -746,6 +753,7 @@
     if (select) select.value = code;
     renderDestinationSelect();
     updateExploreSummary();
+    syncFocusDurationToRoute(state.selectedRoute);
     drawRoutePreview(state.selectedRoute);
   }
 
@@ -872,6 +880,19 @@
     // not the focus session length, so it doesn't need to re-render here.
     updateRadarCircle();
     if (state.currentArc) fitMapToRouteAndRadar(state.currentArc, 1); // reframe so boundary airports stay in view
+  }
+
+  // Whenever a route is selected (map badge click or the destination
+  // picker), moves the Focus Duration ruler to that route's real flight
+  // time, rounded to the nearest 10-minute tick the ruler actually has.
+  // Reuses the ruler's own scroll -> highlight -> debounced-commit pipeline
+  // (the same one a manual tick click triggers) rather than duplicating
+  // that logic, so state.focusMinutes, the radar radius, and badge
+  // visibility all end up correctly in sync without any extra bookkeeping.
+  function syncFocusDurationToRoute(route) {
+    const target = Math.min(1140, Math.max(10, Math.round(route.minutes / 10) * 10));
+    const tick = $(`.ruler-tick[data-minutes="${target}"]`);
+    if (tick) tick.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
   }
 
   function initDurationRuler() {
