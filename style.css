@@ -32,9 +32,12 @@ body { background: var(--bg-deep); }
   position: fixed;
   inset: 0;
   z-index: 0;
-  background: #060410;
+  /* Matches the app's own dark theme (--bg-deep) so any gap during tile
+     load, a transparent errorTileUrl fallback, or an out-of-coverage area
+     blends into a clean dark background instead of looking broken. */
+  background: var(--bg-deep);
 }
-.leaflet-container { background: #060410; font-family: inherit; }
+.leaflet-container { background: var(--bg-deep); font-family: inherit; }
 .leaflet-control-attribution { display: none !important; }
 
 /* Origin / destination markers — flat solid dots */

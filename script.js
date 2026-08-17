@@ -553,10 +553,9 @@
       center: [20, 122],
       zoom: 3,
       minZoom: 2,
-      // Capped at 18 deliberately, even though darkLayer's own maxZoom
-      // allows 19 -- 18 matches darkLayer's maxNativeZoom exactly, so the
-      // interactive map can never actually reach a zoom level that would
-      // need either upscaling or an out-of-coverage request.
+      // Matches darkLayer's maxZoom/maxNativeZoom exactly (18 = 18 = 18),
+      // so the interactive map can never actually reach a zoom level that
+      // would need either upscaling or an out-of-coverage request.
       maxZoom: 18,
       zoomControl: false,
       attributionControl: false,
@@ -586,17 +585,25 @@
     // tileerror never see it as a failure to swap out. errorTileUrl still
     // catches true load failures (network/CORS/404), but the only real fix
     // for this specific placeholder is to never request a zoom level past
-    // where the server actually has coverage in the first place: CartoDB's
-    // dark_all raster tiles are natively available through z18, so pinning
-    // maxNativeZoom there (never requesting z19 native tiles that don't
-    // exist) and matching the map's own ceiling to it (below) means no
-    // upscaling and no out-of-coverage request ever happens.
-    darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    // where the server actually has coverage in the first place -- hence
+    // maxNativeZoom pinned exactly to the map's own maxZoom (18 = 18)
+    // below, so no upscaling and no out-of-coverage request ever happens.
+    // URL uses CARTO's canonical rastertiles path (no subdomain-routing
+    // quirks); subdomains is kept for correctness even though this
+    // particular template has no {s} token to substitute into.
+    darkLayer = L.tileLayer('https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
       subdomains: 'abcd',
       minZoom: 2,
       maxNativeZoom: 18,
-      maxZoom: 19,
+      maxZoom: 18,
+      // A literal '' is falsy, so Leaflet's own _tileOnError skips setting
+      // any fallback src at all and leaves the failed <img> pointed at the
+      // broken URL -- which the browser renders as a small broken-image
+      // icon, not "no error text". A 1x1 transparent PNG data URI actually
+      // achieves what was asked (failed tiles disappear cleanly into the
+      // dark #map background below, no error text AND no broken-image
+      // icon), so that's used here instead of the literal empty string.
       errorTileUrl: TRANSPARENT_TILE,
     });
     darkLayer.addTo(map);
