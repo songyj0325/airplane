@@ -305,7 +305,12 @@
     selectedRoute: ROUTES.find((r) => r.dest === 'HND') || ROUTES[0],
     selectedSeat: null,
     selectedPurpose: 'work',
-    focusMinutes: 30, // user-set session length, independent of the route's real-world duration
+    // Filter threshold only -- the Focus Duration ruler no longer sets the
+    // Pomodoro timer (that's now always the selected route's real flight
+    // time, 100%, at true 1x speed); it just controls which routes are
+    // offered as choices. 240m (4h) as a default shows a useful initial
+    // spread of destinations without the picker starting empty.
+    filterMinutes: 240,
     occupiedSeats: new Set(),
     currentArc: null,
     stats: { totalSeconds: 0, totalKm: 0, flights: 0 }, // recomputed from history by updateStatsSummary() on init
@@ -380,10 +385,6 @@
     return `${Math.floor(totalMin / 60)}h ${totalMin % 60}m`;
   }
   function fmtKm(km) { return Math.round(km).toLocaleString('en-US'); }
-  function fmtSpeedMultiplier(routeMinutes, focusMinutes) {
-    const mult = routeMinutes / focusMinutes;
-    return mult >= 10 ? `${Math.round(mult)}x` : `${mult.toFixed(1)}x`;
-  }
   function todayLabel() {
     const d = new Date();
     return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
@@ -643,7 +644,7 @@
   function updateRadarCircle(minutesOverride) {
     const circle = ensureRadarCircle();
     if (!circle) return;
-    const minutes = minutesOverride != null ? minutesOverride : state.focusMinutes;
+    const minutes = minutesOverride != null ? minutesOverride : state.filterMinutes;
     const radiusKm = reachableKmForMinutes(minutes);
     circle.setLatLngs(buildGeodesicRing(state.selectedRoute.o, radiusKm));
     circle.bringToBack();
@@ -733,7 +734,6 @@
     const destSelect = $('#destination-select');
     if (destSelect) destSelect.value = route.dest;
     updateExploreSummary();
-    syncFocusDurationToRoute(route);
     drawRoutePreview(route);
   }
 
@@ -745,7 +745,11 @@
     if (!code || code === state.originCode) return;
     state.originCode = code;
     ROUTES = buildRoutesFromOrigin(code);
-    state.selectedRoute = ROUTES.find((r) => r.dest === 'HND') || ROUTES[0];
+    // Prefer HND if it's within the current filter range, else the first
+    // route the filter actually allows, else just the first route overall.
+    state.selectedRoute = ROUTES.find((r) => r.dest === 'HND' && r.minutes <= state.filterMinutes)
+      || ROUTES.find((r) => r.minutes <= state.filterMinutes)
+      || ROUTES[0];
     state.selectedSeat = null;
     state.occupiedSeats = generateOccupiedSeats();
     ticketMeta = { flightNo: randomFlightNo() };
@@ -753,7 +757,6 @@
     if (select) select.value = code;
     renderDestinationSelect();
     updateExploreSummary();
-    syncFocusDurationToRoute(state.selectedRoute);
     drawRoutePreview(state.selectedRoute);
   }
 
@@ -775,16 +778,19 @@
     $('#departure-select').addEventListener('change', (e) => setOrigin(e.target.value));
   }
 
-  // Rebuilt whenever the origin changes (the reachable/destination set is
-  // origin-dependent); the currently-selected destination just updates the
-  // select's value in place via selectRoute(), no full rebuild needed.
+  // Rebuilt whenever the origin OR the Flight Time Filter changes -- the
+  // offered destinations are those whose real flight time falls within
+  // state.filterMinutes, always including whatever is currently selected
+  // (even if a filter change just pushed it outside the range) so the
+  // dropdown's displayed value never silently disagrees with state.
   function renderDestinationSelect() {
     const select = $('#destination-select');
     select.innerHTML = '';
     ROUTES.forEach((route) => {
+      if (route.minutes > state.filterMinutes && route.dest !== state.selectedRoute.dest) return;
       const opt = document.createElement('option');
       opt.value = route.dest;
-      opt.textContent = `${route.dest} — ${route.destCity}`;
+      opt.textContent = `${route.dest} — ${route.destCity} (${fmtMinutes(route.minutes)})`;
       select.appendChild(opt);
     });
     select.value = state.selectedRoute.dest;
@@ -799,10 +805,10 @@
   }
 
   // Shows only the selected route's essentials -- destination city/country,
-  // flight duration, total distance. Deliberately independent of
-  // state.focusMinutes (the Pomodoro session length is a separate concept
-  // from the route's own real-world flight time), so this never needs to
-  // re-render on a ruler change.
+  // flight duration, total distance. This flight duration IS the Pomodoro
+  // timer's target once booked (see enterFlightPhase()), so it's
+  // deliberately independent of the Flight Time Filter ruler -- it never
+  // needs to re-render on a ruler change, only on a new route selection.
   function updateExploreSummary() {
     const route = state.selectedRoute;
     const country = countryForCode(route.dest);
@@ -813,15 +819,17 @@
   }
 
   /* ---------------------------------------------------------
-     Focus duration ruler (horizontal scroll picker, 30m – 19h)
-     Independent of the selected route: the route only supplies the
-     visual path/flavor, while this ruler is the actual session timer.
-     19h (1140m) was chosen so the radar radius at max duration --
+     Flight Time Filter ruler (horizontal scroll picker, 10m – 19h)
+     Purely a search filter now -- it narrows which destinations are
+     offered (map badges + the destination dropdown) to routes whose real
+     flight time is within the chosen value. It no longer sets the
+     Pomodoro timer at all: that's always the selected route's own real
+     flight time, at true 1x speed (see enterFlightPhase()).
+     19h (1140m) was chosen so the radar radius at max value --
      reachableKmForMinutes(1140) ~= 15,800km -- comfortably covers the
      world's longest real nonstop routes (e.g. SIN-EWR ~15,335km, needing
      ~18.4h; AKL-DOH ~14,534km, needing ~17.5h), so they surface as the
-     ruler approaches its new ceiling instead of staying permanently
-     out of reach.
+     ruler approaches its ceiling instead of staying permanently excluded.
   --------------------------------------------------------- */
   function buildRulerTickValues() {
     const values = [];
@@ -871,58 +879,21 @@
     $('#ruler-readout').textContent = fmtMinutes(parseInt(tickEl.dataset.minutes, 10));
   }
 
-  // Single source of truth for "a new focus duration just got picked" --
+  // Single source of truth for "the filter threshold just changed" --
   // applies the value and every dependent side effect (radar radius, badge
-  // visibility, camera reframe) immediately and synchronously. Both the
-  // manual ruler scroll and the route-selection auto-sync below funnel
-  // through this, so neither path can leave state out of sync with the UI.
-  function applyFocusMinutes(minutes) {
-    if (minutes === state.focusMinutes) return;
-    state.focusMinutes = minutes;
-    // The route summary card shows only route-intrinsic duration/distance,
-    // not the focus session length, so it doesn't need to re-render here.
+  // visibility, the destination dropdown's offered options, camera
+  // reframe) immediately and synchronously.
+  function applyFilterMinutes(minutes) {
+    if (minutes === state.filterMinutes) return;
+    state.filterMinutes = minutes;
     updateRadarCircle();
+    renderDestinationSelect(); // keep the dropdown's offered choices in sync with the new range
     if (state.currentArc) fitMapToRouteAndRadar(state.currentArc, 1); // reframe so boundary airports stay in view
   }
 
-  function commitFocusMinutes(tickEl) {
+  function commitFilterMinutes(tickEl) {
     if (!tickEl) return;
-    applyFocusMinutes(parseInt(tickEl.dataset.minutes, 10));
-  }
-
-  // Guards the ruler's own scroll listener while a programmatic sync (below)
-  // is animating it. Without this, tick.scrollIntoView({behavior:'smooth'})
-  // for a long jump (e.g. from 19h down to 1h50m) fires the SAME scroll
-  // listener a manual drag uses, and scroll-snap can cause a fast/long
-  // smooth-scroll to settle a tick or two off from the exact target -- that
-  // stray settle would then silently re-commit a DIFFERENT focus duration
-  // than the one syncFocusDurationToRoute() just deliberately set,
-  // overwriting it moments later. This was the actual bug: the sync looked
-  // like it worked (state + readout were briefly correct) and then
-  // reverted.
-  let suppressRulerScrollHandler = false;
-  let suppressRulerScrollTimer = null;
-
-  // Whenever a route is selected (map badge click or the destination
-  // picker), force-syncs the Focus Duration ruler to that route's real
-  // flight time, rounded to the nearest 10-minute tick the ruler actually
-  // has. state.focusMinutes and the readout/active-tick UI are updated
-  // directly and synchronously via applyFocusMinutes()/highlightRulerTick()
-  // -- NOT by triggering scrollIntoView() and waiting for the ruler's own
-  // scroll listener to eventually commit it (see suppressRulerScrollHandler
-  // above for why that was unreliable). scrollIntoView() is still called,
-  // purely for the visual animation, but the scroll listener is told to
-  // stand down while it plays out so it can never re-commit a stray value.
-  function syncFocusDurationToRoute(route) {
-    const target = Math.min(1140, Math.max(10, Math.round(route.minutes / 10) * 10));
-    const tick = $(`.ruler-tick[data-minutes="${target}"]`);
-    if (!tick) return;
-    highlightRulerTick(tick);
-    applyFocusMinutes(target);
-    suppressRulerScrollHandler = true;
-    clearTimeout(suppressRulerScrollTimer);
-    suppressRulerScrollTimer = setTimeout(() => { suppressRulerScrollHandler = false; }, 1000);
-    tick.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    applyFilterMinutes(parseInt(tickEl.dataset.minutes, 10));
   }
 
   function initDurationRuler() {
@@ -930,15 +901,14 @@
     const ruler = $('#duration-ruler');
     let commitTimer = null;
     ruler.addEventListener('scroll', () => {
-      if (suppressRulerScrollHandler) return; // a programmatic sync is driving right now
       const nearest = getNearestRulerTick();
       highlightRulerTick(nearest);
-      if (nearest) updateRadarCircle(parseInt(nearest.dataset.minutes, 10)); // live radar feedback
+      if (nearest) updateRadarCircle(parseInt(nearest.dataset.minutes, 10)); // live radar feedback while dragging
       clearTimeout(commitTimer);
-      commitTimer = setTimeout(() => commitFocusMinutes(nearest), 180);
+      commitTimer = setTimeout(() => commitFilterMinutes(nearest), 180);
     }, { passive: true });
 
-    const defaultTick = $(`.ruler-tick[data-minutes="${state.focusMinutes}"]`) || $('.ruler-tick');
+    const defaultTick = $(`.ruler-tick[data-minutes="${state.filterMinutes}"]`) || $('.ruler-tick');
     highlightRulerTick(defaultTick);
     defaultTick.scrollIntoView({ behavior: 'auto', inline: 'center', block: 'nearest' });
   }
@@ -1259,12 +1229,13 @@
 
     $('#hud-origin-code').textContent = route.origin;
     $('#hud-dest-code').textContent = route.dest;
-    $('#hud-speed-multiplier').querySelector('span').textContent = `${fmtSpeedMultiplier(route.minutes, state.focusMinutes)} speed`;
 
-    // The countdown always runs for the user-set focus duration, never the
-    // route's own real-world flight time -- long-haul routes are simply
-    // traversed faster so they still land exactly when the timer hits zero.
-    const totalSeconds = state.focusMinutes * 60;
+    // The countdown is now 100% the selected route's real flight time, at
+    // true 1x speed -- no more speed-scaling to fit an independently-chosen
+    // session length. Booking Tokyo (110m real flight time) starts the
+    // timer at exactly 1:50:00, counting down in lockstep with the plane's
+    // actual progress along the route.
+    const totalSeconds = route.minutes * 60;
     state.timer.totalSeconds = totalSeconds;
     state.timer.remainingSeconds = totalSeconds;
     state.timer.running = true;
@@ -1376,7 +1347,7 @@
     state.history.unshift({
       origin: route.origin,
       dest: route.dest,
-      minutes: state.focusMinutes,
+      minutes: route.minutes,
       km: route.km,
       seat: state.selectedSeat,
       purpose: state.selectedPurpose,
@@ -1389,7 +1360,7 @@
     announceArrival(route);
 
     $('#landing-desc').textContent = `${fmtKm(route.km)} km 마일리지가 적립되었습니다.`;
-    $('#landing-stat-time').textContent = fmtMinutes(state.focusMinutes);
+    $('#landing-stat-time').textContent = fmtMinutes(route.minutes);
     $('#landing-stat-km').textContent = `+${fmtKm(route.km)} km`;
     renderPassportStamp(route);
     openModal($('#landing-modal'));

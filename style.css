@@ -795,17 +795,6 @@ body { background: var(--bg-deep); }
   margin-bottom: 10px;
 }
 .hud-timer.is-paused { color: rgba(255,255,255,0.4); }
-.hud-speed-multiplier {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-family: 'JetBrains Mono', monospace;
-  font-weight: 700;
-  font-size: 11px;
-  color: var(--cyan);
-  margin-bottom: 10px;
-}
-.hud-speed-multiplier i { color: var(--neon); }
 .hud-progress-track { height: 5px; border-radius: 999px; background: rgba(255,255,255,0.1); overflow: hidden; }
 .hud-progress-fill {
   height: 100%;
@@ -1157,7 +1146,6 @@ body.window-view-active #map {
     left: 8px; bottom: 136px; width: 126px; padding: 9px 10px;
   }
   .hud-timer { font-size: clamp(1.3rem, 7vw, 1.7rem); margin-bottom: 4px; }
-  .hud-speed-multiplier { font-size: 9px; margin-bottom: 4px; gap: 4px; }
   .hud-progress-pct { font-size: 9.5px; margin-top: 4px; }
 
   /* Pause/Abort row -- smaller buttons, tighter gap, guaranteed to fit one
