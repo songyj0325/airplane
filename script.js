@@ -553,6 +553,10 @@
       center: [20, 122],
       zoom: 3,
       minZoom: 2,
+      // Capped at 18 deliberately, even though darkLayer's own maxZoom
+      // allows 19 -- 18 matches darkLayer's maxNativeZoom exactly, so the
+      // interactive map can never actually reach a zoom level that would
+      // need either upscaling or an out-of-coverage request.
       maxZoom: 18,
       zoomControl: false,
       attributionControl: false,
@@ -575,11 +579,24 @@
     // of device locale/theme settings, so satellite/mobile/in-app-browser
     // quirks can never leave the user looking at a bright, foreign-labeled
     // map -- this is the layer every fallback path below ultimately lands on.
+    //
+    // "Map data not yet available" is a genuine 200 OK image with that text
+    // baked into the pixels for out-of-coverage requests -- Leaflet's load
+    // event fires normally for it (it's a valid PNG), so errorTileUrl/
+    // tileerror never see it as a failure to swap out. errorTileUrl still
+    // catches true load failures (network/CORS/404), but the only real fix
+    // for this specific placeholder is to never request a zoom level past
+    // where the server actually has coverage in the first place: CartoDB's
+    // dark_all raster tiles are natively available through z18, so pinning
+    // maxNativeZoom there (never requesting z19 native tiles that don't
+    // exist) and matching the map's own ceiling to it (below) means no
+    // upscaling and no out-of-coverage request ever happens.
     darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
       subdomains: 'abcd',
-      maxZoom: 18,
-      maxNativeZoom: 17,
+      minZoom: 2,
+      maxNativeZoom: 18,
+      maxZoom: 19,
       errorTileUrl: TRANSPARENT_TILE,
     });
     darkLayer.addTo(map);
