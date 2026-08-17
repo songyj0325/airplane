@@ -1682,8 +1682,8 @@
     try {
       const utter = new SpeechSynthesisUtterance(text);
       utter.lang = 'en-US';
-      utter.rate = 0.9;   // slightly slow, deliberate cabin-announcement pace
-      utter.pitch = 0.7;  // forced low regardless of which voice loads, for a consistently deep male tone
+      utter.rate = 0.9;    // slightly slow, deliberate cabin-announcement pace
+      utter.pitch = 0.75;  // forced low regardless of which voice loads (or whether male-voice matching succeeds at all) -- the safety net for devices, like some Samsung Internet TTS engines, where no installed voice can be confidently identified as male
       utter.volume = Math.max(0.15, state.audio.volume);
       const voice = cachedCaptainVoice || pickCaptainVoice(synth.getVoices());
       if (voice) utter.voice = voice;
