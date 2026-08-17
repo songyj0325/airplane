@@ -553,10 +553,14 @@
       center: [20, 122],
       zoom: 3,
       minZoom: 2,
-      // Matches darkLayer's maxZoom/maxNativeZoom exactly (18 = 18 = 18),
-      // so the interactive map can never actually reach a zoom level that
-      // would need either upscaling or an out-of-coverage request.
-      maxZoom: 18,
+      // Capped at 16 (not 18) because ocean/open-water tiles run out of
+      // real CartoDB coverage before land tiles do -- flight routes cross
+      // open sea, so the ceiling has to hold for the emptiest tiles on the
+      // route, not just the best-covered ones. Matches darkLayer's
+      // maxZoom/maxNativeZoom exactly (16 = 16 = 16) so the interactive map
+      // can never reach a zoom level that would need upscaling or an
+      // out-of-coverage request.
+      maxZoom: 16,
       zoomControl: false,
       attributionControl: false,
       worldCopyJump: false,
@@ -570,8 +574,8 @@
 
     satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
       attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics',
-      maxZoom: 18,
-      maxNativeZoom: 17, // beyond this, Leaflet upscales the last real tile instead of requesting missing ones
+      maxZoom: 16, // matches the map's own cap; imagery has real coverage well past this, so no upscaling risk
+      maxNativeZoom: 17,
       errorTileUrl: TRANSPARENT_TILE,
     });
     // The forced default: a fixed English-labeled dark basemap, independent
@@ -586,8 +590,11 @@
     // catches true load failures (network/CORS/404), but the only real fix
     // for this specific placeholder is to never request a zoom level past
     // where the server actually has coverage in the first place -- hence
-    // maxNativeZoom pinned exactly to the map's own maxZoom (18 = 18)
-    // below, so no upscaling and no out-of-coverage request ever happens.
+    // maxNativeZoom pinned exactly to the map's own maxZoom (16 = 16) below,
+    // so no upscaling and no out-of-coverage request ever happens. 16 (not
+    // 18) because open-ocean tiles -- which flight routes cross constantly
+    // -- run out of real CartoDB coverage sooner than land tiles do; the
+    // cap has to hold for the sparsest tiles on a route, not the densest.
     // URL uses CARTO's canonical rastertiles path (no subdomain-routing
     // quirks); subdomains is kept for correctness even though this
     // particular template has no {s} token to substitute into.
@@ -595,8 +602,8 @@
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
       subdomains: 'abcd',
       minZoom: 2,
-      maxNativeZoom: 18,
-      maxZoom: 18,
+      maxNativeZoom: 16,
+      maxZoom: 16,
       // A literal '' is falsy, so Leaflet's own _tileOnError skips setting
       // any fallback src at all and leaves the failed <img> pointed at the
       // broken URL -- which the browser renders as a small broken-image
