@@ -369,101 +369,32 @@ body { background: var(--bg-deep); }
 .ruler-tick.active .ruler-tick-mark { height: 20px; width: 2px; background: var(--neon); }
 .ruler-tick.active .ruler-tick-label { color: var(--neon); font-weight: 700; }
 
-.route-carousel {
-  display: flex;
-  gap: 10px;
-  overflow-x: auto;
-  overflow-y: visible;
-  scroll-snap-type: x proximity;
-  padding: 8px 2px 6px;
-  margin-bottom: 14px;
-}
-.route-carousel::-webkit-scrollbar { height: 5px; }
-
-.route-chip {
-  scroll-snap-align: start;
-  flex-shrink: 0;
-  width: 172px;
-  position: relative;
-  text-align: left;
-  border-radius: 12px;
-  padding: 12px 14px;
-  background: var(--bg-deep);
-  border: 1px solid rgba(255,255,255,0.1);
-  cursor: pointer;
-  transition: border-color .15s ease;
-}
-.route-chip:hover { border-color: rgba(16,185,129,0.5); }
-.route-chip.selected {
-  border: 2px solid var(--neon);
-  padding: 11px 13px;
-}
-.route-chip-selected-badge {
-  position: absolute;
-  top: 8px; right: 8px;
-  width: 18px; height: 18px;
-  border-radius: 50%;
-  background: var(--neon);
-  display: flex; align-items: center; justify-content: center;
-  color: #04120c;
-  opacity: 0;
-  transform: scale(0.5);
-  transition: opacity .15s ease, transform .15s ease;
-}
-.route-chip.selected .route-chip-selected-badge { opacity: 1; transform: scale(1); }
-
-.route-chip-codes {
+/* Destination picker -- same compact look as the departure picker above it */
+.destination-select-wrap {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 9px;
-  padding-right: 20px;
-}
-.rc-airport-badge {
-  font-family: 'JetBrains Mono', monospace;
-  font-weight: 800;
-  font-size: 12.5px;
-  padding: 4px 8px;
-  border-radius: 6px;
-  background: var(--surface);
-  border: 1px solid rgba(255,255,255,0.16);
-  color: #fff;
-  letter-spacing: 0.02em;
-}
-.route-chip.selected .rc-airport-badge {
-  border-color: var(--neon);
-  color: #6ee7b7;
-}
-.route-chip-plane-icon { color: var(--cyan); flex-shrink: 0; }
-.route-chip-cities { font-size: 11px; color: rgba(226,225,240,0.5); margin-bottom: 9px; }
-.route-chip-meta-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.route-chip-duration {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-family: 'JetBrains Mono', monospace;
-  font-weight: 700;
-  font-size: 11px;
-  color: var(--neon);
-  background: var(--surface);
-  border: 1px solid rgba(16,185,129,0.35);
-  border-radius: 6px;
-  padding: 3px 9px;
-}
-.route-chip-speed {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-family: 'JetBrains Mono', monospace;
-  font-weight: 700;
-  font-size: 10.5px;
-  color: rgba(226,225,240,0.55);
+  padding: 5px 10px 5px 12px;
+  border-radius: 8px;
   background: var(--bg-deep);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 6px;
-  padding: 3px 8px;
+  border: 1px solid rgba(255,255,255,0.14);
+  margin-bottom: 14px;
 }
-.route-chip-speed i { color: var(--cyan); }
+.destination-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 12.5px;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  width: 100%;
+}
+.destination-select option { background: var(--surface); color: #fff; }
 
 .explore-cta-row {
   display: flex;
@@ -474,17 +405,30 @@ body { background: var(--bg-deep); }
   border-top: 1px solid rgba(255,255,255,0.1);
   padding-top: 12px;
 }
-.explore-cta-summary { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.ecs-codes {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-family: 'JetBrains Mono', monospace;
+
+/* Route summary card -- the selected route's essentials only: destination,
+   flight duration, total distance. Replaces the old scrollable route-chip
+   carousel + tiny "ecs" teaser text. */
+.route-summary-card { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.route-summary-city {
   font-weight: 800;
   font-size: 17px;
   color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.ecs-meta { font-size: 11px; color: rgba(226,225,240,0.5); }
+.route-summary-stats { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.route-summary-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 12px;
+  color: rgba(226,225,240,0.65);
+}
+.route-summary-stat i { color: var(--neon); flex-shrink: 0; }
 
 /* =========================================================
    Boarding panel
@@ -1161,7 +1105,6 @@ body.window-view-active #map {
 @media (max-width: 1024px) {
   .topbar-stats { gap: 10px; padding: 6px 12px; }
   .topbar-stat { font-size: 11px; }
-  .route-chip { width: 160px; padding: 11px 13px; }
   .explore-panel-inner { padding: 14px 14px 12px; }
   .hud-topright { min-width: 170px; padding: 12px 16px; }
   .hud-bottomleft { width: 220px; padding: 14px 18px; }
@@ -1170,29 +1113,44 @@ body.window-view-active #map {
 }
 
 @media (max-width: 768px) {
-  .top-bar { padding: 10px 12px; gap: 8px; }
-  .icon-pill { width: 34px; height: 34px; }
-  .topbar-stats { gap: 8px; padding: 5px 10px; border-radius: 8px; }
-  .topbar-stat { font-size: 10px; gap: 4px; }
+  /* Top bar: tighter padding/gaps, smaller icon buttons */
+  .top-bar { padding: 8px 10px; gap: 6px; }
+  .icon-pill { width: 32px; height: 32px; border-radius: 8px; }
+  .topbar-stats { gap: 6px; padding: 4px 8px; border-radius: 7px; }
+  .topbar-stat { font-size: 9.5px; gap: 3px; }
+
   .explore-title { font-size: 10px; }
   .departure-select { max-width: 34vw; font-size: 10.5px; }
+  .destination-select { font-size: 11px; }
   .duration-ruler-readout { font-size: 12px; }
-  .route-carousel { gap: 8px; }
-  .route-chip { width: 148px; padding: 10px 12px; }
-  .rc-airport-badge { font-size: 11px; padding: 3px 6px; }
-  .route-chip-cities { font-size: 10px; }
-  .ecs-codes { font-size: 15px; }
   .explore-cta-row { gap: 10px; }
+  .route-summary-city { font-size: 15px; }
+  .route-summary-stat { font-size: 11px; }
   .start-btn { padding: 12px 20px; font-size: 13px; }
 
-  .hud-topright { top: 66px; right: 10px; padding: 10px 14px; min-width: 0; }
-  .hud-readout-value { font-size: clamp(1.25rem, 6vw, 1.6rem); }
-  .hud-bottomleft { left: 10px; bottom: 150px; width: 168px; padding: 12px 14px; }
-  .hud-timer { font-size: clamp(1.8rem, 9vw, 2.3rem); margin-bottom: 8px; }
+  /* Info cards: smaller footprint + translucent so more of the map/window
+     shows behind them instead of the widgets fully covering it. */
+  .hud-topright {
+    top: 60px; right: 10px; padding: 9px 12px; min-width: 0;
+    background: rgba(30,30,30,0.68);
+  }
+  .hud-readout-value { font-size: clamp(1.15rem, 6vw, 1.5rem); }
+  .hud-readout-label { font-size: 8.5px; }
+  .hud-speed { font-size: 11px; margin-top: 6px; }
+  .hud-bottomleft {
+    left: 10px; bottom: 150px; width: 152px; padding: 10px 12px;
+    background: rgba(30,30,30,0.68);
+  }
+  .hud-timer { font-size: clamp(1.6rem, 8vw, 2.1rem); margin-bottom: 6px; }
+  .hud-speed-multiplier { font-size: 10px; margin-bottom: 6px; }
   .hud-controls { bottom: 108px; gap: 8px; }
   .control-btn { padding: 10px 14px; font-size: 12.5px; gap: 6px; }
   .control-btn span { white-space: nowrap; }
-  .hud-topleft { top: 66px; left: 10px; padding: 7px 12px; }
+  .hud-topleft {
+    top: 60px; left: 10px; padding: 6px 11px;
+    background: rgba(30,30,30,0.68);
+  }
+  .hud-route-code { font-size: 12px; }
 
   .pure-mode-timer { font-size: clamp(2.4rem, 16vw, 4rem); }
   .pure-mode-center { gap: 16px; padding: 0 8px; }
@@ -1205,11 +1163,10 @@ body.window-view-active #map {
 }
 
 @media (max-width: 640px) {
-  .hud-bottomleft { width: 180px; padding: 12px 14px; bottom: 168px; left: 12px; }
-  .hud-topright { right: 12px; padding: 10px 14px; }
+  .hud-bottomleft { width: 140px; padding: 9px 11px; bottom: 168px; left: 10px; }
+  .hud-topright { right: 10px; padding: 9px 12px; }
   .hud-controls { bottom: 128px; }
   .explore-panel { padding: 0 8px 10px; }
-  .route-chip { width: 152px; }
 }
 
 /* =========================================================

@@ -115,6 +115,56 @@
     ['MPM', 'Maputo', -25.9208, 32.5726], ['EBB', 'Entebbe', 0.0424, 32.4435],
   ];
 
+  // Country per IATA code, for the "City, Country" summary display -- kept
+  // as a separate lookup (rather than a 5th AIRPORT_DATA column) so the
+  // existing coordinate table never has to be touched to add it.
+  const COUNTRY_BY_CODE = {
+    // North America
+    LAX: 'USA', JFK: 'USA', SFO: 'USA', SJC: 'USA', SEA: 'USA', ORD: 'USA',
+    MIA: 'USA', DFW: 'USA', ATL: 'USA', BOS: 'USA', LAS: 'USA', DEN: 'USA',
+    IAH: 'USA', YVR: 'Canada', YYZ: 'Canada', YUL: 'Canada', MEX: 'Mexico',
+    CUN: 'Mexico', PHX: 'USA', IAD: 'USA', EWR: 'USA', MSP: 'USA', DTW: 'USA',
+    PHL: 'USA', SAN: 'USA', PDX: 'USA', HNL: 'USA', YYC: 'Canada', YOW: 'Canada',
+    GDL: 'Mexico',
+    // South America
+    GRU: 'Brazil', GIG: 'Brazil', BOG: 'Colombia', EZE: 'Argentina',
+    SCL: 'Chile', LIM: 'Peru', UIO: 'Ecuador', SJO: 'Costa Rica',
+    LPB: 'Bolivia', MVD: 'Uruguay', CCS: 'Venezuela', PTY: 'Panama',
+    ASU: 'Paraguay', GYE: 'Ecuador', CUZ: 'Peru', FOR: 'Brazil',
+    // Europe
+    LHR: 'United Kingdom', LGW: 'United Kingdom', CDG: 'France', ORY: 'France',
+    FRA: 'Germany', MUC: 'Germany', AMS: 'Netherlands', MAD: 'Spain',
+    BCN: 'Spain', FCO: 'Italy', MXP: 'Italy', ZRH: 'Switzerland',
+    VIE: 'Austria', CPH: 'Denmark', ARN: 'Sweden', OSL: 'Norway',
+    HEL: 'Finland', PRG: 'Czech Republic', BUD: 'Hungary', ATH: 'Greece',
+    IST: 'Turkey', WAW: 'Poland', DUB: 'Ireland', BRU: 'Belgium',
+    GVA: 'Switzerland', LIS: 'Portugal', MAN: 'United Kingdom', EDI: 'United Kingdom',
+    OTP: 'Romania', SOF: 'Bulgaria', BEG: 'Serbia', ZAG: 'Croatia',
+    LJU: 'Slovenia', KEF: 'Iceland', SVO: 'Russia', LED: 'Russia',
+    NCE: 'France', BER: 'Germany', HAM: 'Germany', MLA: 'Malta',
+    // Asia / Korea
+    ICN: 'South Korea', GMP: 'South Korea', PUS: 'South Korea', CJU: 'South Korea',
+    YNY: 'South Korea', TAE: 'South Korea', KWJ: 'South Korea',
+    HND: 'Japan', NRT: 'Japan', KIX: 'Japan', NGO: 'Japan', FUK: 'Japan',
+    CTS: 'Japan', OKA: 'Japan', PEK: 'China', PVG: 'China', CAN: 'China',
+    CTU: 'China', TPE: 'Taiwan', HKG: 'Hong Kong', MFM: 'Macau',
+    BKK: 'Thailand', SIN: 'Singapore', KUL: 'Malaysia', SGN: 'Vietnam',
+    HAN: 'Vietnam', MNL: 'Philippines', DEL: 'India', BOM: 'India',
+    CGK: 'Indonesia', DPS: 'Indonesia', PNH: 'Cambodia', RGN: 'Myanmar',
+    // Oceania / Middle East / Africa
+    SYD: 'Australia', MEL: 'Australia', BNE: 'Australia', PER: 'Australia',
+    AKL: 'New Zealand', CHC: 'New Zealand', DXB: 'United Arab Emirates',
+    AUH: 'United Arab Emirates', DOH: 'Qatar', JNB: 'South Africa',
+    CPT: 'South Africa', CAI: 'Egypt', CMN: 'Morocco', NBO: 'Kenya',
+    ADD: 'Ethiopia', LOS: 'Nigeria', ACC: 'Ghana', TUN: 'Tunisia',
+    ALG: 'Algeria', RUH: 'Saudi Arabia', JED: 'Saudi Arabia', AMM: 'Jordan',
+    TLV: 'Israel', BAH: 'Bahrain', KWI: 'Kuwait', MCT: 'Oman',
+    WLG: 'New Zealand', NAN: 'Fiji', GUM: 'Guam', NOU: 'New Caledonia',
+    MRU: 'Mauritius', SEZ: 'Seychelles', DAR: 'Tanzania', HRE: 'Zimbabwe',
+    MPM: 'Mozambique', EBB: 'Uganda',
+  };
+  function countryForCode(code) { return COUNTRY_BY_CODE[code] || ''; }
+
   const AIRPORTS = AIRPORT_DATA.map(([code, city, lat, lng]) => ({ code, city, lat, lng }));
   function airportByCode(code) { return AIRPORTS.find((a) => a.code === code); }
 
@@ -653,13 +703,9 @@
   }
 
   /* ---------------------------------------------------------
-     Route carousel & selection
+     Route selection -- a direct destination picker + a summary card,
+     replacing the old scrollable "recommended routes" carousel.
   --------------------------------------------------------- */
-  function isSameRoute(a, b) {
-    if (!a || !b) return false;
-    return a.origin === b.origin && a.dest === b.dest && a.minutes === b.minutes && a.km === b.km;
-  }
-
   function generateOccupiedSeats() {
     const cols = SEAT_COLS;
     const rows = SEAT_ROWS;
@@ -678,7 +724,8 @@
     state.selectedSeat = null;
     state.occupiedSeats = generateOccupiedSeats();
     ticketMeta = { flightNo: randomFlightNo() };
-    renderRouteCarousel();
+    const destSelect = $('#destination-select');
+    if (destSelect) destSelect.value = route.dest;
     updateExploreSummary();
     drawRoutePreview(route);
   }
@@ -697,7 +744,7 @@
     ticketMeta = { flightNo: randomFlightNo() };
     const select = $('#departure-select');
     if (select) select.value = code;
-    renderRouteCarousel();
+    renderDestinationSelect();
     updateExploreSummary();
     drawRoutePreview(state.selectedRoute);
   }
@@ -720,28 +767,40 @@
     $('#departure-select').addEventListener('change', (e) => setOrigin(e.target.value));
   }
 
-  function renderRouteCarousel() {
-    const carousel = $('#route-carousel');
-    const tpl = $('#route-chip-template');
-    carousel.innerHTML = '';
+  // Rebuilt whenever the origin changes (the reachable/destination set is
+  // origin-dependent); the currently-selected destination just updates the
+  // select's value in place via selectRoute(), no full rebuild needed.
+  function renderDestinationSelect() {
+    const select = $('#destination-select');
+    select.innerHTML = '';
     ROUTES.forEach((route) => {
-      const node = tpl.content.firstElementChild.cloneNode(true);
-      node.querySelector('.rc-origin').textContent = route.origin;
-      node.querySelector('.rc-dest').textContent = route.dest;
-      node.querySelector('.route-chip-cities').textContent = `${route.originCity} → ${route.destCity}`;
-      node.querySelector('.rc-duration').textContent = fmtMinutes(route.minutes);
-      node.querySelector('.rc-speed').textContent = fmtSpeedMultiplier(route.minutes, state.focusMinutes);
-      if (isSameRoute(route, state.selectedRoute)) node.classList.add('selected');
-      node.addEventListener('click', () => selectRoute(route));
-      carousel.appendChild(node);
+      const opt = document.createElement('option');
+      opt.value = route.dest;
+      opt.textContent = `${route.dest} — ${route.destCity}`;
+      select.appendChild(opt);
     });
-    refreshIcons();
+    select.value = state.selectedRoute.dest;
   }
 
+  function initDestinationSelect() {
+    renderDestinationSelect();
+    $('#destination-select').addEventListener('change', (e) => {
+      const route = ROUTES.find((r) => r.dest === e.target.value);
+      if (route) selectRoute(route);
+    });
+  }
+
+  // Shows only the selected route's essentials -- destination city/country,
+  // flight duration, total distance. Deliberately independent of
+  // state.focusMinutes (the Pomodoro session length is a separate concept
+  // from the route's own real-world flight time), so this never needs to
+  // re-render on a ruler change.
   function updateExploreSummary() {
     const route = state.selectedRoute;
-    $('#ecs-codes').innerHTML = `${route.origin} <i data-lucide="plane" class="w-3.5 h-3.5 inline text-cyan"></i> ${route.dest}`;
-    $('#ecs-meta').textContent = `${fmtMinutes(state.focusMinutes)} session · ${fmtKm(route.km)} km · ${fmtSpeedMultiplier(route.minutes, state.focusMinutes)} speed`;
+    const country = countryForCode(route.dest);
+    $('#route-summary-city').textContent = country ? `${route.destCity}, ${country}` : route.destCity;
+    $('#route-summary-duration').textContent = fmtMinutes(route.minutes);
+    $('#route-summary-distance').textContent = `${fmtKm(route.km)} km`;
     refreshIcons();
   }
 
@@ -809,8 +868,8 @@
     const minutes = parseInt(tickEl.dataset.minutes, 10);
     if (minutes === state.focusMinutes) return;
     state.focusMinutes = minutes;
-    renderRouteCarousel();
-    updateExploreSummary();
+    // The route summary card shows only route-intrinsic duration/distance,
+    // not the focus session length, so it doesn't need to re-render here.
     updateRadarCircle();
     if (state.currentArc) fitMapToRouteAndRadar(state.currentArc, 1); // reframe so boundary airports stay in view
   }
@@ -981,10 +1040,36 @@
 
   const TICKET_TEAR_DURATION = 600;
 
+  // Mobile browsers (in-app WebViews like Instagram/KakaoTalk especially,
+  // but also Safari/Chrome) block audio that isn't started synchronously
+  // inside a user gesture. The takeoff chime and captain's PA only actually
+  // fire several setTimeout hops later (ticket tear -> runway zoom -> climb
+  // -> enterFlightPhase), well outside that window, which is why they'd
+  // silently fail to play on mobile. Both APIs are gesture-scoped rather
+  // than call-scoped though: resuming the AudioContext and speaking one
+  // silent utterance HERE, synchronously in the click handler, unlocks both
+  // for the rest of the page session -- the delayed real calls downstream
+  // then just work.
+  function unlockMobileAudio() {
+    try {
+      const ctx = getAudioCtx();
+      if (ctx.state === 'suspended') ctx.resume();
+    } catch (e) { /* Web Audio unsupported */ }
+    try {
+      const synth = window.speechSynthesis;
+      if (synth) {
+        const primer = new SpeechSynthesisUtterance(' ');
+        primer.volume = 0;
+        synth.speak(primer);
+      }
+    } catch (e) { /* Web Speech unsupported */ }
+  }
+
   function beginBoardingDeparture() {
     const checkinBtn = $('#start-boarding-btn');
     const ticket = $('.boarding-pass');
     if (checkinBtn.disabled) return;
+    unlockMobileAudio();
     checkinBtn.disabled = true;
     if (ticket) ticket.classList.add('tearing');
 
@@ -1973,8 +2058,8 @@
 
     state.occupiedSeats = generateOccupiedSeats();
     initDepartureSelect();
+    initDestinationSelect();
     initDurationRuler();
-    renderRouteCarousel();
     updateExploreSummary();
     drawRoutePreview(state.selectedRoute);
 

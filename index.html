@@ -99,7 +99,7 @@
   </div>
 </header>
 
-<!-- ===================== EXPLORE PHASE (bottom carousel) ===================== -->
+<!-- ===================== EXPLORE PHASE (direct route selection) ===================== -->
 <section id="explore-panel" class="hud-layer explore-panel">
   <div class="explore-panel-inner">
     <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
@@ -119,12 +119,19 @@
       </div>
     </div>
 
-    <div id="route-carousel" class="route-carousel"><!-- route chips injected --></div>
+    <div class="destination-select-wrap" title="Select Destination">
+      <i data-lucide="map-pin" class="w-3.5 h-3.5 text-neon"></i>
+      <label for="destination-select" class="sr-only">Select Destination</label>
+      <select id="destination-select" class="destination-select"><!-- options injected --></select>
+    </div>
 
     <div class="explore-cta-row">
-      <div class="explore-cta-summary">
-        <span class="ecs-codes" id="ecs-codes">PUS <i data-lucide="plane" class="w-3.5 h-3.5 inline -rotate-0 text-cyan"></i> OKA</span>
-        <span class="ecs-meta" id="ecs-meta">1h 31m · 1,004 km</span>
+      <div class="route-summary-card">
+        <div class="route-summary-city" id="route-summary-city">Tokyo, Japan</div>
+        <div class="route-summary-stats">
+          <span class="route-summary-stat"><i data-lucide="clock" class="w-3.5 h-3.5"></i><span id="route-summary-duration">2h 30m</span></span>
+          <span class="route-summary-stat"><i data-lucide="gauge-circle" class="w-3.5 h-3.5"></i><span id="route-summary-distance">1,200 km</span></span>
+        </div>
       </div>
       <button id="select-seat-btn" class="start-btn">
         <i data-lucide="ticket" class="w-5 h-5"></i>
@@ -274,23 +281,6 @@
 </div>
 
 <!-- ===================== TEMPLATES ===================== -->
-
-<template id="route-chip-template">
-  <button class="route-chip" type="button">
-    <div class="route-chip-selected-badge"><i data-lucide="check" class="w-3 h-3"></i></div>
-    <div class="route-chip-codes">
-      <span class="rc-airport-badge rc-origin"></span>
-      <i data-lucide="plane" class="w-3.5 h-3.5 route-chip-plane-icon"></i>
-      <span class="rc-airport-badge rc-dest"></span>
-    </div>
-    <div class="route-chip-cities"></div>
-    <div class="route-chip-meta-row">
-      <div class="route-chip-duration"><i data-lucide="clock" class="w-3 h-3"></i><span class="rc-duration"></span></div>
-      <div class="route-chip-speed"><i data-lucide="zap" class="w-3 h-3"></i><span class="rc-speed"></span></div>
-    </div>
-  </button>
-</template>
-
 <template id="boarding-pass-template">
   <div class="boarding-pass">
     <div class="bp-main">
