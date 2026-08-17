@@ -871,9 +871,12 @@
     $('#ruler-readout').textContent = fmtMinutes(parseInt(tickEl.dataset.minutes, 10));
   }
 
-  function commitFocusMinutes(tickEl) {
-    if (!tickEl) return;
-    const minutes = parseInt(tickEl.dataset.minutes, 10);
+  // Single source of truth for "a new focus duration just got picked" --
+  // applies the value and every dependent side effect (radar radius, badge
+  // visibility, camera reframe) immediately and synchronously. Both the
+  // manual ruler scroll and the route-selection auto-sync below funnel
+  // through this, so neither path can leave state out of sync with the UI.
+  function applyFocusMinutes(minutes) {
     if (minutes === state.focusMinutes) return;
     state.focusMinutes = minutes;
     // The route summary card shows only route-intrinsic duration/distance,
@@ -882,17 +885,44 @@
     if (state.currentArc) fitMapToRouteAndRadar(state.currentArc, 1); // reframe so boundary airports stay in view
   }
 
+  function commitFocusMinutes(tickEl) {
+    if (!tickEl) return;
+    applyFocusMinutes(parseInt(tickEl.dataset.minutes, 10));
+  }
+
+  // Guards the ruler's own scroll listener while a programmatic sync (below)
+  // is animating it. Without this, tick.scrollIntoView({behavior:'smooth'})
+  // for a long jump (e.g. from 19h down to 1h50m) fires the SAME scroll
+  // listener a manual drag uses, and scroll-snap can cause a fast/long
+  // smooth-scroll to settle a tick or two off from the exact target -- that
+  // stray settle would then silently re-commit a DIFFERENT focus duration
+  // than the one syncFocusDurationToRoute() just deliberately set,
+  // overwriting it moments later. This was the actual bug: the sync looked
+  // like it worked (state + readout were briefly correct) and then
+  // reverted.
+  let suppressRulerScrollHandler = false;
+  let suppressRulerScrollTimer = null;
+
   // Whenever a route is selected (map badge click or the destination
-  // picker), moves the Focus Duration ruler to that route's real flight
-  // time, rounded to the nearest 10-minute tick the ruler actually has.
-  // Reuses the ruler's own scroll -> highlight -> debounced-commit pipeline
-  // (the same one a manual tick click triggers) rather than duplicating
-  // that logic, so state.focusMinutes, the radar radius, and badge
-  // visibility all end up correctly in sync without any extra bookkeeping.
+  // picker), force-syncs the Focus Duration ruler to that route's real
+  // flight time, rounded to the nearest 10-minute tick the ruler actually
+  // has. state.focusMinutes and the readout/active-tick UI are updated
+  // directly and synchronously via applyFocusMinutes()/highlightRulerTick()
+  // -- NOT by triggering scrollIntoView() and waiting for the ruler's own
+  // scroll listener to eventually commit it (see suppressRulerScrollHandler
+  // above for why that was unreliable). scrollIntoView() is still called,
+  // purely for the visual animation, but the scroll listener is told to
+  // stand down while it plays out so it can never re-commit a stray value.
   function syncFocusDurationToRoute(route) {
     const target = Math.min(1140, Math.max(10, Math.round(route.minutes / 10) * 10));
     const tick = $(`.ruler-tick[data-minutes="${target}"]`);
-    if (tick) tick.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    if (!tick) return;
+    highlightRulerTick(tick);
+    applyFocusMinutes(target);
+    suppressRulerScrollHandler = true;
+    clearTimeout(suppressRulerScrollTimer);
+    suppressRulerScrollTimer = setTimeout(() => { suppressRulerScrollHandler = false; }, 1000);
+    tick.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
   }
 
   function initDurationRuler() {
@@ -900,6 +930,7 @@
     const ruler = $('#duration-ruler');
     let commitTimer = null;
     ruler.addEventListener('scroll', () => {
+      if (suppressRulerScrollHandler) return; // a programmatic sync is driving right now
       const nearest = getNearestRulerTick();
       highlightRulerTick(nearest);
       if (nearest) updateRadarCircle(parseInt(nearest.dataset.minutes, 10)); // live radar feedback
@@ -1080,10 +1111,33 @@
       const synth = window.speechSynthesis;
       if (synth) {
         const primer = new SpeechSynthesisUtterance(' ');
-        primer.volume = 0;
+        primer.volume = 0.01; // near-silent but nonzero, so engines that
+        // short-circuit a literal 0-volume utterance still register it as a
+        // real gesture-triggered speak() call
         synth.speak(primer);
       }
     } catch (e) { /* Web Speech unsupported */ }
+  }
+
+  // Belt-and-suspenders unlock coverage, since exactly which gesture/event
+  // type actually satisfies a given mobile browser's autoplay policy is
+  // inconsistent (iOS Safari in particular is known to be more reliable
+  // with the raw touchstart than with a synthesized click on touch
+  // devices): fires on the very first touch or click ANYWHERE on the page
+  // (each only once), and again explicitly on both the "Book My Flight"
+  // and "Start Boarding" buttons via both click and touchstart, so no
+  // matter which of those the user's browser actually honors, the
+  // AudioContext/SpeechSynthesis are unlocked well before the captain's
+  // delayed PA announcement actually needs them.
+  function initMobileAudioUnlock() {
+    document.addEventListener('touchstart', unlockMobileAudio, { once: true, passive: true });
+    document.addEventListener('click', unlockMobileAudio, { once: true, passive: true });
+    ['#select-seat-btn', '#start-boarding-btn'].forEach((sel) => {
+      const el = $(sel);
+      if (!el) return;
+      el.addEventListener('touchstart', unlockMobileAudio, { passive: true });
+      el.addEventListener('click', unlockMobileAudio);
+    });
   }
 
   function beginBoardingDeparture() {
@@ -2093,6 +2147,7 @@
     initMapStyleToggle();
     initPureMode();
     initWindowView();
+    initMobileAudioUnlock();
     primeSpeechVoices();
 
     refreshIcons();

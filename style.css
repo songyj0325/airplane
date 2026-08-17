@@ -1113,11 +1113,21 @@ body.window-view-active #map {
 }
 
 @media (max-width: 768px) {
-  /* Top bar: tighter padding/gaps, smaller icon buttons */
-  .top-bar { padding: 8px 10px; gap: 6px; }
-  .icon-pill { width: 32px; height: 32px; border-radius: 8px; }
-  .topbar-stats { gap: 6px; padding: 4px 8px; border-radius: 7px; }
-  .topbar-stat { font-size: 9.5px; gap: 3px; }
+  /* Frosted-glass treatment shared by every floating info card on mobile --
+     translucent fill + blur, so the map/window stays visible and legible
+     behind them instead of a flat opaque panel blocking it outright. */
+  .hud-topright, .hud-bottomleft, .hud-topleft {
+    background: rgba(24,24,26,0.5);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  /* Top bar: tighter padding/gaps, smaller icon buttons -- "음소거,
+     풀스크린 등" all share .icon-pill, so this one rule tightens all of them. */
+  .top-bar { padding: 6px 8px; gap: 4px; }
+  .icon-pill { width: 30px; height: 30px; border-radius: 7px; }
+  .topbar-stats { gap: 5px; padding: 3px 7px; border-radius: 6px; }
+  .topbar-stat { font-size: 9px; gap: 3px; }
 
   .explore-title { font-size: 10px; }
   .departure-select { max-width: 34vw; font-size: 10.5px; }
@@ -1128,29 +1138,44 @@ body.window-view-active #map {
   .route-summary-stat { font-size: 11px; }
   .start-btn { padding: 12px 20px; font-size: 13px; }
 
-  /* Info cards: smaller footprint + translucent so more of the map/window
-     shows behind them instead of the widgets fully covering it. */
+  /* Flight Stats card -- padding ~43% and font ~37-39% below desktop
+     (14px 18px / clamp(1.5rem,4vw,1.9rem)), well within the requested
+     30-40% range, so it stops covering as much of the map. */
   .hud-topright {
-    top: 60px; right: 10px; padding: 9px 12px; min-width: 0;
-    background: rgba(30,30,30,0.68);
+    top: 54px; right: 8px; padding: 8px 10px; min-width: 0;
   }
-  .hud-readout-value { font-size: clamp(1.15rem, 6vw, 1.5rem); }
-  .hud-readout-label { font-size: 8.5px; }
-  .hud-speed { font-size: 11px; margin-top: 6px; }
+  .hud-readout-value { font-size: clamp(0.95rem, 5vw, 1.15rem); }
+  .hud-readout-label { font-size: 8px; }
+  .hud-speed { font-size: 10px; margin-top: 4px; gap: 4px; }
+  .hud-stats-card-header { margin-bottom: 6px; padding-bottom: 5px; }
+  .hud-unit-toggle { padding: 1px 7px; font-size: 9px; }
+
+  /* Time Remaining card -- same ~35-40% reduction off desktop
+     (16px 20px / clamp(2.1rem,6vw,2.7rem)), and narrow enough that it no
+     longer spans a big chunk of the screen width. */
   .hud-bottomleft {
-    left: 10px; bottom: 150px; width: 152px; padding: 10px 12px;
-    background: rgba(30,30,30,0.68);
+    left: 8px; bottom: 136px; width: 126px; padding: 9px 10px;
   }
-  .hud-timer { font-size: clamp(1.6rem, 8vw, 2.1rem); margin-bottom: 6px; }
-  .hud-speed-multiplier { font-size: 10px; margin-bottom: 6px; }
-  .hud-controls { bottom: 108px; gap: 8px; }
-  .control-btn { padding: 10px 14px; font-size: 12.5px; gap: 6px; }
+  .hud-timer { font-size: clamp(1.3rem, 7vw, 1.7rem); margin-bottom: 4px; }
+  .hud-speed-multiplier { font-size: 9px; margin-bottom: 4px; gap: 4px; }
+  .hud-progress-pct { font-size: 9.5px; margin-top: 4px; }
+
+  /* Pause/Abort row -- smaller buttons, tighter gap, guaranteed to fit one
+     row alongside the window-view/pure-mode icon toggles beside them, with
+     enough clearance below the Time Remaining card above it (measured:
+     the old 76px/118px pairing put them 4px into each other). */
+  .hud-controls { bottom: 64px; gap: 5px; }
+  .control-btn { padding: 6px 10px; font-size: 11px; gap: 4px; }
+  .control-btn svg { width: 14px; height: 14px; }
   .control-btn span { white-space: nowrap; }
-  .hud-topleft {
-    top: 60px; left: 10px; padding: 6px 11px;
-    background: rgba(30,30,30,0.68);
-  }
-  .hud-route-code { font-size: 12px; }
+
+  .hud-topleft { top: 54px; left: 8px; padding: 5px 9px; gap: 4px; }
+  .hud-route-code { font-size: 11px; }
+
+  .window-view-controls { gap: 5px; top: max(12px, env(safe-area-inset-top, 0px)); }
+  .window-view-controls-left { left: max(12px, env(safe-area-inset-left, 0px)); }
+  .window-view-controls-right { right: max(12px, env(safe-area-inset-right, 0px)); }
+  .window-view-icon-btn { width: 32px; height: 32px; border-radius: 8px; }
 
   .pure-mode-timer { font-size: clamp(2.4rem, 16vw, 4rem); }
   .pure-mode-center { gap: 16px; padding: 0 8px; }
@@ -1163,9 +1188,12 @@ body.window-view-active #map {
 }
 
 @media (max-width: 640px) {
-  .hud-bottomleft { width: 140px; padding: 9px 11px; bottom: 168px; left: 10px; }
-  .hud-topright { right: 10px; padding: 9px 12px; }
-  .hud-controls { bottom: 128px; }
+  .hud-bottomleft { width: 112px; padding: 8px 9px; bottom: 132px; left: 8px; }
+  .hud-timer { font-size: clamp(1.15rem, 8vw, 1.5rem); }
+  .hud-topright { right: 8px; padding: 8px 10px; }
+  .hud-readout-value { font-size: clamp(0.85rem, 6vw, 1.05rem); }
+  .hud-controls { bottom: 62px; }
+  .control-btn { padding: 6px 9px; font-size: 10.5px; }
   .explore-panel { padding: 0 8px 10px; }
 }
 
