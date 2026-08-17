@@ -1586,16 +1586,24 @@
   // Checked in priority order against each voice's name -- covers the
   // common male English voices across Chrome/Edge (Windows), Safari/Chrome
   // (macOS/iOS), and Android TTS. Falls through to a name-based "male"
-  // heuristic, then to any English voice, if none of these are installed.
+  // heuristic, then to a female-name-excluding pick among English voices,
+  // if none of these are installed.
   const PREFERRED_MALE_VOICE_NAMES = [
     'Google UK English Male',
-    'Microsoft David',
-    'Microsoft Guy',
-    'Microsoft Mark',
+    'Microsoft David',   // Windows classic en-US male
+    'Microsoft Guy',     // Edge Natural en-US male
+    'Microsoft Mark',    // Windows classic en-US male
+    'Microsoft Ryan',    // Edge Natural en-GB male
+    'Microsoft Christopher', // Edge Natural en-US male
+    'Microsoft Andrew',  // Edge Natural en-US male
+    'Microsoft Brian',   // Edge Natural en-US male
     'Daniel',   // macOS/iOS en-GB male
+    'Arthur',   // macOS/iOS en-GB male (newer)
+    'Oliver',   // macOS/iOS en-GB male (newer)
     'Alex',     // macOS en-US male (classic default)
     'Fred',     // macOS en-US male
     'Aaron',    // Android en-US male
+    'Rishi',    // Android en-IN male
   ];
 
   function pickCaptainVoice(voices) {
@@ -1605,7 +1613,11 @@
     }
     const byHeuristic = voices.find((v) => /^en/i.test(v.lang) && /male/i.test(v.name) && !/female/i.test(v.name));
     if (byHeuristic) return byHeuristic;
-    return voices.find((v) => /en-US|en-GB/.test(v.lang)) || null;
+    // Last resort: any English voice, but never one explicitly labeled
+    // "female" -- an unlabeled voice is an unknown gender, not a known
+    // female one, so it's still preferable to a name that rules itself out.
+    const englishVoices = voices.filter((v) => /en-US|en-GB/.test(v.lang));
+    return englishVoices.find((v) => !/female/i.test(v.name)) || englishVoices[0] || null;
   }
 
   // Voice lists load asynchronously in most browsers -- getVoices() can
