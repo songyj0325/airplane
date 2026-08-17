@@ -1583,12 +1583,14 @@
   /* ---------------------------------------------------------
      Captain's PA announcements (Web Speech API)
   --------------------------------------------------------- */
-  // Checked in priority order against each voice's name -- covers the
-  // common male English voices across Chrome/Edge (Windows), Safari/Chrome
-  // (macOS/iOS), and Android TTS. Falls through to a name-based "male"
-  // heuristic, then to a female-name-excluding pick among English voices,
-  // if none of these are installed.
-  const PREFERRED_MALE_VOICE_NAMES = [
+  // Checked in priority order against each voice's name/voiceURI -- covers
+  // the common male voices across Chrome/Edge (Windows), Safari/Chrome
+  // (macOS/iOS), and Android TTS. The last few entries exist specifically
+  // for Samsung Internet/Android: that engine's voice list frequently has
+  // no gender word anywhere in the display name, so matching has to reach
+  // into vendor-specific engine identifiers (which show up in voiceURI,
+  // not name) as well as generic short names.
+  const PREFERRED_MALE_VOICE_KEYWORDS = [
     'Google UK English Male',
     'Microsoft David',   // Windows classic en-US male
     'Microsoft Guy',     // Edge Natural en-US male
@@ -1604,33 +1606,74 @@
     'Fred',     // macOS en-US male
     'Aaron',    // Android en-US male
     'Rishi',    // Android en-IN male
+    'Male',
+    'Guy',
+    'David',
+    'Google 한국어',
+    'ko-KR-language',
+    'ko-kr-x-ism',      // Samsung/Android Korean male TTS engine id
+    'samsung-ko-kr',
   ];
 
+  // Voices whose name signals female are excluded outright, even if they
+  // would otherwise match a preferred keyword above -- this runs first so
+  // a female-named voice can never slip through via a coincidental match.
+  const EXCLUDED_FEMALE_VOICE_KEYWORDS = ['female', 'woman', '지민', '유미'];
+
+  function isExcludedFemaleVoice(voice) {
+    if (!/^(en|ko)/i.test(voice.lang || '')) return false;
+    const haystack = `${voice.name || ''} ${voice.voiceURI || ''}`.toLowerCase();
+    return EXCLUDED_FEMALE_VOICE_KEYWORDS.some((kw) => haystack.includes(kw.toLowerCase()));
+  }
+
   function pickCaptainVoice(voices) {
-    for (const name of PREFERRED_MALE_VOICE_NAMES) {
-      const match = voices.find((v) => v.name.includes(name));
+    const candidates = voices.filter((v) => !isExcludedFemaleVoice(v));
+
+    for (const keyword of PREFERRED_MALE_VOICE_KEYWORDS) {
+      const needle = keyword.toLowerCase();
+      const match = candidates.find((v) => `${v.name || ''} ${v.voiceURI || ''}`.toLowerCase().includes(needle));
       if (match) return match;
     }
-    const byHeuristic = voices.find((v) => /^en/i.test(v.lang) && /male/i.test(v.name) && !/female/i.test(v.name));
+    const byHeuristic = candidates.find((v) => /^(en|ko)/i.test(v.lang) && /male/i.test(v.name));
     if (byHeuristic) return byHeuristic;
-    // Last resort: any English voice, but never one explicitly labeled
-    // "female" -- an unlabeled voice is an unknown gender, not a known
-    // female one, so it's still preferable to a name that rules itself out.
-    const englishVoices = voices.filter((v) => /en-US|en-GB/.test(v.lang));
-    return englishVoices.find((v) => !/female/i.test(v.name)) || englishVoices[0] || null;
+    // Last resort: any candidate voice (female names already excluded
+    // above) in the announcement's language family. Deliberately never
+    // falls back to the original unfiltered `voices` list -- if every
+    // installed voice was excluded as female, returning null (so the
+    // browser applies its own utter.lang default) still honors the
+    // "strictly exclude" requirement; reaching back into `voices` here
+    // would silently undo it.
+    const localeMatch = candidates.find((v) => /^(en|ko)/i.test(v.lang));
+    return localeMatch || candidates[0] || null;
+  }
+
+  // Cached so a Samsung Internet/Android voiceschanged re-fire (that engine
+  // loads its voice list asynchronously, sometimes in multiple waves as
+  // different TTS packages register) always lands in time for the next
+  // announcement instead of racing a synchronous getVoices() call made
+  // right before speaking.
+  let cachedCaptainVoice = null;
+
+  function refreshCaptainVoice() {
+    const synth = window.speechSynthesis;
+    if (!synth) return;
+    const voices = synth.getVoices();
+    if (voices.length > 0) cachedCaptainVoice = pickCaptainVoice(voices);
   }
 
   // Voice lists load asynchronously in most browsers -- getVoices() can
   // return [] on the very first call. Priming it once at startup (rather
   // than only at announcement time, well after the page has settled) makes
   // it far more likely the male-voice preference below actually has a
-  // populated list to search by the time a flight starts.
+  // populated list to search by the time a flight starts. No {once:true}:
+  // Samsung Internet/Android can fire voiceschanged more than once as
+  // additional voice packages finish registering, and each fire re-checks
+  // for a better male match.
   function primeSpeechVoices() {
     const synth = window.speechSynthesis;
     if (!synth) return;
-    if (synth.getVoices().length === 0) {
-      synth.addEventListener('voiceschanged', () => synth.getVoices(), { once: true });
-    }
+    refreshCaptainVoice();
+    synth.addEventListener('voiceschanged', refreshCaptainVoice);
   }
 
   function speakAnnouncement(text) {
@@ -1639,10 +1682,10 @@
     try {
       const utter = new SpeechSynthesisUtterance(text);
       utter.lang = 'en-US';
-      utter.rate = 0.9;    // measured, unhurried cabin-announcement pace
-      utter.pitch = 0.85;  // lowered for a deeper, calmer captain's voice
+      utter.rate = 0.9;   // slightly slow, deliberate cabin-announcement pace
+      utter.pitch = 0.7;  // forced low regardless of which voice loads, for a consistently deep male tone
       utter.volume = Math.max(0.15, state.audio.volume);
-      const voice = pickCaptainVoice(synth.getVoices());
+      const voice = cachedCaptainVoice || pickCaptainVoice(synth.getVoices());
       if (voice) utter.voice = voice;
       synth.cancel(); // avoid stacking announcements if one is already queued
       synth.speak(utter);
